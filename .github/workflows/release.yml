@@ -1,0 +1,43 @@
+name: Release package
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          fetch-depth: 0
+      - name: Verify release commit is on main
+        run: |
+          git fetch origin main --no-tags
+          git merge-base --is-ancestor HEAD origin/main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Enforce approved dependency registry
+        run: |
+          npm config set registry https://packagefeedproxy.microsoft.io/npm/
+          test "$(npm config get registry)" = "https://packagefeedproxy.microsoft.io/npm/"
+      - run: npm ci
+      - run: npm run check
+      - name: Verify tag matches package version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: node -e "const p=require('./package.json'); if (process.env.RELEASE_TAG !== 'v' + p.version) throw new Error('Release tag does not match package version')"
+      - name: Select npm distribution tag
+        id: dist-tag
+        run: |
+          node -e "const p=require('./package.json'); process.stdout.write('tag=' + (p.version.includes('-') ? 'next' : 'latest'))" >> "$GITHUB_OUTPUT"
+      - name: Publish with npm trusted publishing
+        run: npm publish --access public --provenance --tag "${{ steps.dist-tag.outputs.tag }}" --registry=https://registry.npmjs.org/
