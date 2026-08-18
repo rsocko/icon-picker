@@ -33,9 +33,17 @@ const requiredFiles = [
   'package.json',
 ];
 const missingFiles = requiredFiles.filter((file) => !packagedFiles.has(file));
+const forbiddenPrefixes = ['demo/', 'demo-dist/', '.github/'];
+const forbiddenFiles = [...packagedFiles].filter((file) =>
+  forbiddenPrefixes.some((prefix) => file.startsWith(prefix)),
+);
 
 if (missingFiles.length > 0) {
   throw new Error(`Package is missing required files: ${missingFiles.join(', ')}`);
+}
+
+if (forbiddenFiles.length > 0) {
+  throw new Error(`Package includes non-runtime files: ${forbiddenFiles.join(', ')}`);
 }
 
 if (manifest.name !== '@rsocko/icon-picker' || manifest.version !== '0.1.0-rc.0') {
