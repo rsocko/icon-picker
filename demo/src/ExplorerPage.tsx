@@ -211,6 +211,7 @@ async function getCopyValue(
   name: string,
   format: CopyFormat,
   color: string,
+  signal: AbortSignal,
 ): Promise<string> {
   const parsed: ParsedIcon = { source, name };
   const serialized = serializeIconValue(parsed);
@@ -223,7 +224,7 @@ async function getCopyValue(
       return url ?? serialized;
     case 'svg': {
       if (!url) return serialized;
-      const response = await fetch(url);
+      const response = await fetch(url, { signal });
       if (!response.ok) {
         throw new Error(`SVG provider returned HTTP ${response.status}.`);
       }
@@ -271,7 +272,9 @@ export function ExplorerPage() {
   const [copyStatus, setCopyStatus] = useState<CopyStatus | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const copySequence = useRef(0);
+  const copyAnnouncementSequence = useRef(0);
+  const copyRequestSequence = useRef(0);
+  const copyController = useRef<AbortController | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -349,6 +352,7 @@ export function ExplorerPage() {
   useEffect(() => {
     return () => {
       if (copyTimer.current) clearTimeout(copyTimer.current);
+      copyController.current?.abort();
     };
   }, []);
 
@@ -455,21 +459,54 @@ export function ExplorerPage() {
 
   async function copyIcon(source: IconSource, name: string) {
     const selectedFormat = copyFormat;
+    const requestSequence = ++copyRequestSequence.current;
+    copyController.current?.abort();
+    const controller = new AbortController();
+    copyController.current = controller;
     if (copyTimer.current) clearTimeout(copyTimer.current);
+    setCopyStatus(null);
     try {
-      const value = await getCopyValue(source, name, selectedFormat, color);
+      const value = await getCopyValue(
+        source,
+        name,
+        selectedFormat,
+        color,
+        controller.signal,
+      );
+      if (
+        controller.signal.aborted ||
+        requestSequence !== copyRequestSequence.current
+      ) {
+        return;
+      }
       await navigator.clipboard.writeText(value);
+      if (
+        controller.signal.aborted ||
+        requestSequence !== copyRequestSequence.current
+      ) {
+        return;
+      }
       setCopyStatus({
         message: `Copied ${selectedFormat}`,
-        sequence: ++copySequence.current,
+        sequence: ++copyAnnouncementSequence.current,
       });
       copyTimer.current = setTimeout(() => setCopyStatus(null), 1800);
     } catch {
+      if (
+        controller.signal.aborted ||
+        requestSequence !== copyRequestSequence.current
+      ) {
+        return;
+      }
       setCopyStatus({
         message: 'Copy failed',
-        sequence: ++copySequence.current,
+        sequence: ++copyAnnouncementSequence.current,
       });
       copyTimer.current = setTimeout(() => setCopyStatus(null), 1800);
+    } finally {
+      if (copyController.current === controller) {
+        copyController.current = null;
+      }
     }
   }
 

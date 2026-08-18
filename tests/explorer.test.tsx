@@ -1,8 +1,16 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ExplorerPage } from '../demo/src/ExplorerPage';
 
 const writeText = vi.fn<(value: string) => Promise<void>>();
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((promiseResolve) => {
+    resolve = promiseResolve;
+  });
+  return { promise, resolve };
+}
 
 function response(body: unknown, text = ''): Response {
   return {
@@ -90,6 +98,56 @@ describe('full-page explorer', () => {
       expect(writeText).toHaveBeenCalledWith(
         '<svg viewBox="0 0 24 24"><path d="M0 0h24v24H0z"/></svg>',
       ),
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('Copied svg');
+  });
+
+  it('allows only the latest concurrent SVG request to write to the clipboard', async () => {
+    const firstSvg = deferred<Response>();
+    const secondSvg = deferred<Response>();
+    const defaultFetch = vi.mocked(fetch).getMockImplementation();
+    vi.mocked(fetch).mockImplementation((input) => {
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      if (url.includes('/lucide/home.svg')) return firstSvg.promise;
+      if (url.includes('/lucide/settings.svg')) return secondSvg.promise;
+      if (!defaultFetch) throw new Error('Missing default fetch mock.');
+      return defaultFetch(input);
+    });
+
+    render(<ExplorerPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'SVG' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Copy lucide:home as svg' }),
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Copy lucide:settings as svg' }),
+    );
+
+    secondSvg.resolve(
+      response(null, '<svg data-icon="settings" viewBox="0 0 24 24"></svg>'),
+    );
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith(
+        '<svg data-icon="settings" viewBox="0 0 24 24"></svg>',
+      ),
+    );
+
+    await act(async () => {
+      firstSvg.resolve(
+        response(null, '<svg data-icon="home" viewBox="0 0 24 24"></svg>'),
+      );
+      await firstSvg.promise;
+      await Promise.resolve();
+    });
+
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(writeText).not.toHaveBeenCalledWith(
+      '<svg data-icon="home" viewBox="0 0 24 24"></svg>',
     );
     expect(screen.getByRole('status')).toHaveTextContent('Copied svg');
   });

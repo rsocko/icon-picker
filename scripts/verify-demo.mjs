@@ -7,10 +7,32 @@ const explorerPath = resolve(outputDirectory, 'explorer', 'index.html');
 const indexHtml = await readFile(indexPath, 'utf8');
 const explorerHtml = await readFile(explorerPath, 'utf8');
 
-for (const [name, html] of [
-  ['landing page', indexHtml],
-  ['explorer page', explorerHtml],
-]) {
+const providerOrigins = [
+  'https://api.iconify.design',
+  'https://cdn.jsdelivr.net',
+  'https://cdn.simpleicons.org',
+];
+
+const pages = [
+  {
+    name: 'landing page',
+    html: indexHtml,
+    connectOrigins: providerOrigins.slice(0, 2),
+  },
+  {
+    name: 'explorer page',
+    html: explorerHtml,
+    connectOrigins: providerOrigins,
+  },
+];
+
+function getDirectiveSources(html, directive) {
+  return new Set(
+    new RegExp(`${directive}\\s+([^;]+)`).exec(html)?.[1].split(/\s+/) ?? [],
+  );
+}
+
+for (const { name, html, connectOrigins } of pages) {
   if (!html.includes('/icon-picker/assets/')) {
     throw new Error(`${name} assets are not rooted at the /icon-picker/ Pages subpath.`);
   }
@@ -19,13 +41,15 @@ for (const [name, html] of [
     throw new Error(`${name} contains a root-relative asset that will fail on GitHub Pages.`);
   }
 
-  for (const origin of [
-    'https://api.iconify.design',
-    'https://cdn.jsdelivr.net',
-    'https://cdn.simpleicons.org',
+  for (const [directive, origins] of [
+    ['connect-src', connectOrigins],
+    ['img-src', providerOrigins],
   ]) {
-    if (!html.includes(origin)) {
-      throw new Error(`${name} CSP is missing provider origin: ${origin}`);
+    const sources = getDirectiveSources(html, directive);
+    for (const origin of origins) {
+      if (!sources.has(origin)) {
+        throw new Error(`${name} CSP ${directive} is missing provider origin: ${origin}`);
+      }
     }
   }
 }
