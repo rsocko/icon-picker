@@ -121,10 +121,10 @@
 .rs-icon-picker__colors {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 5px;
   padding: 7px 12px;
   border-bottom: 1px solid var(--rs-icon-picker-border);
-  overflow-x: auto;
 }
 
 .rs-icon-picker__filter {
@@ -178,6 +178,23 @@
   min-height: 120px;
   flex: 1;
   overflow-y: auto;
+  scrollbar-color: var(--rs-icon-picker-border) transparent;
+  scrollbar-width: thin;
+}
+
+.rs-icon-picker__results::-webkit-scrollbar {
+  width: 8px;
+}
+
+.rs-icon-picker__results::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.rs-icon-picker__results::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--rs-icon-picker-border);
+  background-clip: padding-box;
 }
 
 .rs-icon-picker__state {

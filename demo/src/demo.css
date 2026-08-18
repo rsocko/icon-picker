@@ -337,7 +337,8 @@ footer {
   font-size: 12px;
 }
 
-.section h2 {
+.section-heading h2,
+.accessibility-section > div > h2 {
   margin: 0;
   font-size: clamp(2rem, 4vw, 3.25rem);
   letter-spacing: -0.045em;
