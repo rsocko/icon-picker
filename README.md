@@ -15,6 +15,11 @@ showcases the picker, portal trigger, renderer, every provider, portable values,
 core utilities, network states, and keyboard behavior. It builds from repository
 source and can deploy before the npm package is published.
 
+The companion
+[full-page explorer](https://rsocko.github.io/icon-picker/explorer/) provides a
+dense icon-finder workspace with provider filters, copy formats, colors, sizes,
+keyboard shortcuts, and live multi-provider search.
+
 ## Install
 
 ```sh

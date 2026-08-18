@@ -9,5 +9,11 @@ export default defineConfig({
   build: {
     outDir: resolve(import.meta.dirname, 'demo-dist'),
     emptyOutDir: true,
+    rollupOptions: {
+      input: {
+        main: resolve(import.meta.dirname, 'demo/index.html'),
+        explorer: resolve(import.meta.dirname, 'demo/explorer/index.html'),
+      },
+    },
   },
 });

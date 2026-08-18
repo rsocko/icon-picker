@@ -140,6 +140,9 @@ export function Demo() {
               <a className="primary-action" href="#playground">
                 Try the picker
               </a>
+              <a className="secondary-action" href={`${import.meta.env.BASE_URL}explorer/`}>
+                Open full explorer
+              </a>
               <span className="install-command">
                 <code>npm i @rsocko/icon-picker@next</code>
                 <small>after the prerelease is published</small>
@@ -184,6 +187,9 @@ export function Demo() {
               Pick a source, search the live catalogs, choose a color, then inspect
               the exact value your application stores.
             </p>
+            <a className="section-link" href={`${import.meta.env.BASE_URL}explorer/`}>
+              Launch full-page explorer
+            </a>
           </div>
 
           <div className="playground-grid">

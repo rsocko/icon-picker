@@ -198,6 +198,7 @@ footer {
 }
 
 .primary-action,
+.secondary-action,
 .install-command {
   padding: 12px 17px;
   border-radius: 10px;
@@ -208,6 +209,14 @@ footer {
   background: #eef2ff;
   color: #151a2e;
   font-weight: 750;
+  text-decoration: none;
+}
+
+.secondary-action {
+  border: 1px solid rgb(124 140 255 / 0.34);
+  background: rgb(124 140 255 / 0.1);
+  color: #cbd3ff;
+  font-weight: 700;
   text-decoration: none;
 }
 
@@ -349,6 +358,24 @@ footer {
   margin: 0;
   color: var(--demo-muted);
   line-height: 1.65;
+}
+
+.section-link {
+  flex: 0 0 auto;
+  padding: 9px 12px;
+  border: 1px solid rgb(124 140 255 / 0.3);
+  border-radius: 9px;
+  color: #adb8ff;
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.section-link:hover,
+.section-link:focus-visible,
+.secondary-action:hover,
+.secondary-action:focus-visible {
+  border-color: rgb(124 140 255 / 0.7);
+  color: #fff;
 }
 
 .playground-grid {
