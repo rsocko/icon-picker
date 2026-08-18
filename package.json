@@ -65,8 +65,11 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "demo:dev": "vite --config vite.demo.config.ts",
+    "demo:build": "vite build --config vite.demo.config.ts",
+    "demo:verify": "node scripts/verify-demo.mjs",
     "package:verify": "node scripts/verify-package.mjs",
-    "check": "npm run lint && npm run typecheck && npm run test && npm run build && npm run package:verify",
+    "check": "npm run lint && npm run typecheck && npm run test && npm run build && npm run demo:build && npm run demo:verify && npm run package:verify",
     "prepack": "npm run build"
   },
   "peerDependencies": {

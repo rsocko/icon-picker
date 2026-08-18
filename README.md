@@ -7,6 +7,14 @@ Icons, and Simple Icons without storing provider-specific objects.
 > The first proposed release is `0.1.0-rc.0`. The package is not published
 > until this repository's release setup and API have been reviewed.
 
+## Live demo
+
+The entirely static, client-side demo is deployed to
+[rsocko.github.io/icon-picker](https://rsocko.github.io/icon-picker/). It
+showcases the picker, portal trigger, renderer, every provider, portable values,
+core utilities, network states, and keyboard behavior. It builds from repository
+source and can deploy before the npm package is published.
+
 ## Install
 
 ```sh
@@ -218,6 +226,11 @@ remain available. Renderer failures use the caller-provided fallback. The
 package sends no credentials or user data, but search text is sent to Iconify
 when a Lucide, MDI, or Phosphor search is active.
 
+Catalog requests rely on the providers' browser CORS policies. `<img>` delivery
+also depends on those remote services being available. Offline, native emoji,
+parsing/serialization, and built-in popular lists continue to work, while
+remote searches and SVGs may show their documented error or fallback states.
+
 Provider and dependency license information is in
 [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md). Brand marks may remain
 subject to trademark and brand-usage rules even when icon data is permissively
@@ -246,10 +259,30 @@ npm run lint
 npm run typecheck
 npm test
 npm run build
+npm run demo:build
+npm run demo:verify
 npm run package:verify
 ```
 
-CI runs all five checks and verifies the npm file manifest. The release
+Run the demo locally with `npm run demo:dev`; Vite serves it at `/icon-picker/`
+to match the production Pages subpath. `demo-dist/` is generated and ignored.
+The npm package uses an explicit file allowlist, and package verification rejects
+demo or workflow files if that boundary changes.
+
+### GitHub Pages deployment
+
+`.github/workflows/pages.yml` builds the static demo and deploys the
+`demo-dist/` artifact using the official Pages actions. It uses read-only
+repository access plus only `pages: write` and `id-token: write` for deployment.
+No generated site, credentials, API keys, or npm package are involved.
+
+After merging the workflow, an administrator may need to select **GitHub
+Actions** under **Settings → Pages → Build and deployment → Source** once. Pushes
+to `main` then deploy automatically, and `workflow_dispatch` supports a manual
+retry. Deployment is independent of npm publication.
+
+CI runs source, package, and static-demo checks and verifies the npm file
+manifest. The release
 workflow publishes only from a published GitHub release using npm trusted
 publishing and provenance. Before enabling a release, configure
 `@rsocko/icon-picker` on npm with:

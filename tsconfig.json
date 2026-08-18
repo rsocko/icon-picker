@@ -15,5 +15,13 @@
     "esModuleInterop": true,
     "types": ["vitest/globals", "@testing-library/jest-dom"]
   },
-  "include": ["src", "tests", "vite.config.ts", "vitest.config.ts", "eslint.config.js"]
+  "include": [
+    "src",
+    "demo",
+    "tests",
+    "vite.config.ts",
+    "vite.demo.config.ts",
+    "vitest.config.ts",
+    "eslint.config.js"
+  ]
 }
