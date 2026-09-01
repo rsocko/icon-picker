@@ -303,6 +303,11 @@ stored in this repository, and this branch does not publish anything.
 Prereleases are published under npm's `next` distribution tag; only stable
 versions receive `latest`.
 
+See [`docs/RELEASING.md`](docs/RELEASING.md) for the one-time bootstrap
+publish procedure (npm Trusted Publishing requires the package to already
+exist), the full release/recovery runbook, and how downstream consumers on
+corporate networks should pin and verify an exact published version.
+
 ## License
 
 MIT © 2026 Ryan Sockalosky. See [`LICENSE`](./LICENSE).
