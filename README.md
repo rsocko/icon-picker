@@ -82,6 +82,7 @@ picker's emoji search data and lazy emoji browser:
 ```ts
 import {
   getIconUrl,
+  getSimpleIconNames,
   parseIconValue,
   serializeIconValue,
   type IconSource,
@@ -138,8 +139,9 @@ invalid colors are ignored.
 ### `IconPickerButton`
 
 The trigger opens a fixed-position portal, flips to stay in the viewport,
-closes on outside pointer input or Escape, restores trigger focus, and contains
-focus while its dialog is open.
+resizes to the available space (including narrow viewports), closes on outside
+pointer input or Escape, restores trigger focus, and contains focus while its
+dialog is open.
 
 Important props:
 
@@ -152,6 +154,7 @@ Important props:
 | `size` | `'sm' \| 'md' \| 'lg'` | `'md'` |
 | `disabled` | `boolean` | `false` |
 | `color` | `string` | — |
+| `pickerColor` | `string` | `color` |
 | `onColorChange` | `(color: string) => void` | — |
 | `label` | `string` | `'Pick an icon'` |
 | `portalTarget` | `Element \| null` | `document.body` |
@@ -162,14 +165,17 @@ Important props:
 `IconPicker` supports source filtering, a local emoji keyword search, remote
 Iconify search, provider catalog filtering, color selection, loading and empty
 states, provider error notices, retries, keyboard activation, and an
-`aria-live` result count. Set `modal` only when embedding it in your own modal
-surface; `IconPickerButton` does this automatically.
+`aria-live` result count. Iconify results are resolved in batched icon-set
+requests, including aliases, then rendered as CSS masks so uncolored icons
+inherit the consumer's current text color. Set `modal` only when embedding it
+in your own modal surface; `IconPickerButton` does this automatically.
 
 ### `IconRenderer`
 
-`IconRenderer` renders emoji as text and provider icons as lazy `<img>`
-elements. It rejects unsafe provider names, uses `no-referrer`, and renders
-`fallback` after a network image error. Pass `label=""` for a decorative icon.
+`IconRenderer` renders emoji as text, uncolored monochrome Iconify icons as
+theme-aware CSS masks, and other provider icons as lazy `<img>` elements. It
+rejects unsafe provider names, uses `no-referrer`, and renders `fallback` after
+a network image error. Pass `label=""` for a decorative icon.
 
 ```tsx
 <IconRenderer value="mdi:home" size={24} color="#10b981" />
@@ -267,12 +273,21 @@ npm run build
 npm run demo:build
 npm run demo:verify
 npm run package:verify
+npm run package:artifact
 ```
 
 Run the demo locally with `npm run demo:dev`; Vite serves it at `/icon-picker/`
 to match the production Pages subpath. `demo-dist/` is generated and ignored.
 The npm package uses an explicit file allowlist, and package verification rejects
-demo or workflow files if that boundary changes.
+demo or workflow files if that boundary changes. Package verification performs
+two real `npm pack` runs and requires byte-identical tarballs.
+
+`npm run package:artifact` is intended for exact-commit downstream
+synchronization. From a clean checkout it writes the tarball plus a
+machine-readable `artifacts/UPSTREAM.json` containing the exact commit, optional
+matching tag, package identity, complete file manifest, npm integrity, and
+SHA-256/SHA-512 hashes. See [`docs/RELEASING.md`](./docs/RELEASING.md) for the
+vendored-consumer and optional npm release procedures.
 
 ### GitHub Pages deployment
 

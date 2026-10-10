@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 import { IconPicker } from '../src/IconPicker';
 import { IconPickerButton } from '../src/IconPickerButton';
 
@@ -21,16 +21,12 @@ function mockCatalogs() {
   return vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
     const url = requestUrl(input);
     if (url.includes('tree.json')) return Promise.resolve(jsonResponse({ svg: [] }));
-    if (url.includes('simple-icons.json')) {
-      return Promise.resolve(jsonResponse([]));
+    if (url.includes('collection?prefix=simple-icons')) {
+      return Promise.resolve(jsonResponse({ uncategorized: [] }));
     }
     return Promise.resolve(jsonResponse({ icons: [] }));
   });
 }
-
-afterEach(() => {
-  document.body.innerHTML = '';
-});
 
 describe('IconPicker', () => {
   it('selects a popular emoji using an accessible button', () => {
@@ -102,9 +98,9 @@ describe('IconPicker', () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
       const url = requestUrl(input);
       if (url.includes('tree.json')) return Promise.resolve(jsonResponse({ svg: [] }));
-      if (url.includes('simple-icons.json')) {
+      if (url.includes('collection?prefix=simple-icons')) {
         return Promise.resolve(
-          jsonResponse([{ slug: 'acmeunique', title: 'Acme Unique' }]),
+          jsonResponse({ uncategorized: ['acmeunique'] }),
         );
       }
       return Promise.resolve(jsonResponse({ icons: [] }));
@@ -126,8 +122,8 @@ describe('IconPicker', () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
       const url = requestUrl(input);
       if (url.includes('tree.json')) return Promise.resolve(jsonResponse({ svg: [] }));
-      if (url.includes('simple-icons.json')) {
-        return Promise.resolve(jsonResponse([]));
+      if (url.includes('collection?prefix=simple-icons')) {
+        return Promise.resolve(jsonResponse({ uncategorized: [] }));
       }
       return new Promise<Response>((resolve) => {
         resolveSearch = resolve;
@@ -148,8 +144,8 @@ describe('IconPicker', () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
       const url = requestUrl(input);
       if (url.includes('tree.json')) return Promise.resolve(jsonResponse({ svg: [] }));
-      if (url.includes('simple-icons.json')) {
-        return Promise.resolve(jsonResponse([]));
+      if (url.includes('collection?prefix=simple-icons')) {
+        return Promise.resolve(jsonResponse({ uncategorized: [] }));
       }
       return Promise.reject(new Error('offline'));
     });
@@ -164,9 +160,64 @@ describe('IconPicker', () => {
     );
     expect(screen.getByRole('button', { name: 'Retry providers' })).toBeInTheDocument();
   });
+
+  it('renders Iconify aliases from a batched icon-set request', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const url = requestUrl(input);
+      if (url.includes('tree.json')) return Promise.resolve(jsonResponse({ svg: [] }));
+      if (url.includes('collection?prefix=simple-icons')) {
+        return Promise.resolve(jsonResponse({ uncategorized: [] }));
+      }
+      if (url.includes('/lucide.json?')) {
+        return Promise.resolve(
+          jsonResponse({
+            width: 24,
+            height: 24,
+            icons: {
+              house: { body: '<path d="M3 11 12 2l9 9v11H3z"/>' },
+            },
+            aliases: { home: { parent: 'house' } },
+          }),
+        );
+      }
+      return Promise.resolve(jsonResponse({ icons: [] }));
+    });
+
+    render(<IconPicker value={null} onChange={vi.fn()} />);
+    const alias = await screen.findByRole('img', { name: 'lucide:home' });
+    expect(alias.style.maskImage).toContain(
+      encodeURIComponent('M3 11 12 2l9 9v11H3z'),
+    );
+  });
 });
 
 describe('IconPickerButton', () => {
+  function setViewport(width: number, height: number) {
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: width,
+    });
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      value: height,
+    });
+  }
+
+  function mockTriggerRect(rect: Partial<DOMRect>) {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      bottom: 540,
+      height: 40,
+      left: 900,
+      right: 964,
+      top: 500,
+      width: 64,
+      x: 900,
+      y: 500,
+      toJSON: () => ({}),
+      ...rect,
+    });
+  }
+
   it('opens a dialog, selects an icon, and restores focus', async () => {
     mockCatalogs();
     const onChange = vi.fn();
@@ -203,5 +254,54 @@ describe('IconPickerButton', () => {
     rerender(<IconPickerButton value={null} onChange={vi.fn()} disabled />);
     fireEvent.click(trigger);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('uses the viewport as an overlay when neither side is usable', () => {
+    mockCatalogs();
+    setViewport(360, 300);
+    mockTriggerRect({
+      bottom: 170,
+      left: 280,
+      right: 344,
+      top: 130,
+      x: 280,
+      y: 130,
+    });
+
+    render(<IconPickerButton value={null} onChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Pick an icon' }));
+
+    expect(screen.getByRole('dialog', { name: 'Choose an icon' }).parentElement).toHaveStyle({
+      height: '284px',
+      left: '8px',
+      top: '8px',
+      width: '344px',
+      visibility: 'visible',
+    });
+  });
+
+  it('repositions and resizes while open', () => {
+    mockCatalogs();
+    setViewport(1200, 800);
+    mockTriggerRect({
+      bottom: 140,
+      left: 100,
+      right: 164,
+      top: 100,
+      x: 100,
+      y: 100,
+    });
+
+    render(<IconPickerButton value={null} onChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Pick an icon' }));
+    const popover = screen.getByRole('dialog', { name: 'Choose an icon' })
+      .parentElement;
+    expect(popover).toHaveStyle({ height: '520px', left: '100px', top: '144px' });
+
+    setViewport(1200, 400);
+    act(() => {
+      window.dispatchEvent(new Event('resize'));
+    });
+    expect(popover).toHaveStyle({ height: '248px', left: '100px', top: '144px' });
   });
 });

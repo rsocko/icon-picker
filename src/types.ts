@@ -49,6 +49,8 @@ export interface IconPickerButtonProps {
   className?: string;
   disabled?: boolean;
   color?: string | undefined;
+  /** Picker color when the rendered trigger uses a resolved theme color. */
+  pickerColor?: string | undefined;
   onColorChange?: ((color: string) => void) | undefined;
   /** Accessible name and tooltip for the trigger. */
   label?: string;

@@ -37,10 +37,15 @@ beforeEach(() => {
       );
     }
     if (url.includes('tree.json')) return Promise.resolve(response({ svg: [] }));
-    if (url.includes('simple-icons.json')) {
+    if (url.includes('collection?prefix=simple-icons')) {
       return Promise.resolve(
-        response([{ title: '.NET' }, { title: 'Rocket.Chat' }, { title: 'GitHub' }]),
+        response({
+          uncategorized: ['dotnet', 'rocketdotchat', 'github'],
+        }),
       );
+    }
+    if (url.includes('.json?icons=')) {
+      return Promise.resolve(response({ icons: {} }));
     }
     if (url.includes('/search?')) {
       const searchUrl = new URL(url);

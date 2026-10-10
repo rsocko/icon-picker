@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
 } from 'react';
@@ -17,6 +18,59 @@ const SIZE_CONFIG = {
   lg: { className: 'rs-icon-picker-trigger--lg', iconSize: 28 },
 } as const;
 
+const PICKER_WIDTH = 420;
+const PICKER_HEIGHT = 520;
+const MIN_USABLE_PICKER_HEIGHT = 240;
+const VIEWPORT_MARGIN = 8;
+const TRIGGER_GAP = 4;
+const useBrowserLayoutEffect =
+  typeof window === 'undefined' ? useEffect : useLayoutEffect;
+
+interface PickerPosition {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+}
+
+function calculatePickerPosition(
+  rect: DOMRect,
+  viewportWidth: number,
+  viewportHeight: number,
+): PickerPosition {
+  const width = Math.max(
+    1,
+    Math.min(PICKER_WIDTH, viewportWidth - VIEWPORT_MARGIN * 2),
+  );
+  const spaceBelow = Math.max(
+    0,
+    viewportHeight - rect.bottom - TRIGGER_GAP - VIEWPORT_MARGIN,
+  );
+  const spaceAbove = Math.max(0, rect.top - TRIGGER_GAP - VIEWPORT_MARGIN);
+  const openAbove = spaceBelow < PICKER_HEIGHT && spaceAbove > spaceBelow;
+  const viewportHeightLimit = Math.max(1, viewportHeight - VIEWPORT_MARGIN * 2);
+  const overlapTrigger =
+    Math.max(spaceAbove, spaceBelow) <
+    Math.min(MIN_USABLE_PICKER_HEIGHT, viewportHeightLimit);
+  const height = overlapTrigger
+    ? Math.min(PICKER_HEIGHT, viewportHeightLimit)
+    : Math.min(PICKER_HEIGHT, openAbove ? spaceAbove : spaceBelow);
+  const left = Math.min(
+    Math.max(VIEWPORT_MARGIN, rect.left),
+    Math.max(VIEWPORT_MARGIN, viewportWidth - VIEWPORT_MARGIN - width),
+  );
+  const top = overlapTrigger
+    ? VIEWPORT_MARGIN
+    : openAbove
+      ? Math.max(VIEWPORT_MARGIN, rect.top - TRIGGER_GAP - height)
+      : Math.min(
+          rect.bottom + TRIGGER_GAP,
+          Math.max(VIEWPORT_MARGIN, viewportHeight - VIEWPORT_MARGIN - height),
+        );
+
+  return { top, left, width, height };
+}
+
 export function IconPickerButton({
   value,
   onChange,
@@ -26,13 +80,14 @@ export function IconPickerButton({
   className,
   disabled = false,
   color,
+  pickerColor = color,
   onColorChange,
   label = 'Pick an icon',
   portalTarget,
   pickerProps,
 }: IconPickerButtonProps) {
   const [open, setOpen] = useState(false);
-  const [position, setPosition] = useState({ top: 0, left: 0 });
+  const [position, setPosition] = useState<PickerPosition | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const reactId = useId();
@@ -55,35 +110,41 @@ export function IconPickerButton({
     [setOpenAndNotify],
   );
 
-  useEffect(() => {
+  useBrowserLayoutEffect(() => {
     if (!open) return;
 
     function updatePosition() {
       const trigger = triggerRef.current;
       if (!trigger) return;
       const rect = trigger.getBoundingClientRect();
-      const pickerWidth = Math.min(420, window.innerWidth - 16);
-      const pickerHeight = Math.min(520, window.innerHeight - 16);
-      const openAbove =
-        window.innerHeight - rect.bottom - 8 < pickerHeight &&
-        rect.top > pickerHeight;
-      setPosition({
-        top: openAbove
-          ? Math.max(8, rect.top - pickerHeight - 4)
-          : Math.min(window.innerHeight - pickerHeight - 8, rect.bottom + 4),
-        left: Math.min(
-          Math.max(8, rect.left),
-          Math.max(8, window.innerWidth - pickerWidth - 8),
-        ),
-      });
+      const next = calculatePickerPosition(
+        rect,
+        window.innerWidth,
+        window.innerHeight,
+      );
+      setPosition((current) =>
+        current &&
+        current.top === next.top &&
+        current.left === next.left &&
+        current.width === next.width &&
+        current.height === next.height
+          ? current
+          : next,
+      );
+    }
+
+    function handleScroll(event: Event) {
+      const target = event.target;
+      if (target instanceof Node && popoverRef.current?.contains(target)) return;
+      updatePosition();
     }
 
     updatePosition();
     window.addEventListener('resize', updatePosition);
-    window.addEventListener('scroll', updatePosition, true);
+    window.addEventListener('scroll', handleScroll, true);
     return () => {
       window.removeEventListener('resize', updatePosition);
-      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('scroll', handleScroll, true);
     };
   }, [open]);
 
@@ -148,7 +209,14 @@ export function IconPickerButton({
           <div
             ref={popoverRef}
             className="rs-icon-picker-popover"
-            style={{ top: position.top, left: position.left }}
+            onMouseDown={(event) => event.stopPropagation()}
+            style={{
+              top: position?.top ?? 0,
+              left: position?.left ?? 0,
+              width: position?.width ?? PICKER_WIDTH,
+              height: position?.height ?? PICKER_HEIGHT,
+              visibility: position ? 'visible' : 'hidden',
+            }}
           >
             <IconPicker
               {...pickerProps}
@@ -159,7 +227,7 @@ export function IconPickerButton({
                 closePicker(true);
               }}
               onClose={() => closePicker(true)}
-              color={color}
+              color={pickerColor}
               onColorChange={onColorChange}
               modal
             />

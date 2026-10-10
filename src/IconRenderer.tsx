@@ -45,6 +45,39 @@ export const IconRenderer = memo(function IconRenderer({
   const url = getIconUrl(parsed, color);
   if (!url || failedUrl === url) return <>{fallback}</>;
 
+  if (
+    !color &&
+    (parsed.source === 'lucide' ||
+      parsed.source === 'mdi' ||
+      parsed.source === 'ph')
+  ) {
+    return (
+      <>
+        <span
+          role={accessibleLabel ? 'img' : undefined}
+          aria-label={accessibleLabel || undefined}
+          aria-hidden={accessibleLabel ? undefined : true}
+          className={cx('rs-icon-picker__renderer-mask', className)}
+          style={{
+            width: renderedSize,
+            height: renderedSize,
+            maskImage: `url("${url}")`,
+            WebkitMaskImage: `url("${url}")`,
+          }}
+        />
+        <img
+          src={url}
+          alt=""
+          aria-hidden="true"
+          width={0}
+          height={0}
+          className="rs-icon-picker__renderer-probe"
+          onError={() => setFailedUrl(url)}
+        />
+      </>
+    );
+  }
+
   return (
     <img
       src={url}
@@ -57,11 +90,6 @@ export const IconRenderer = memo(function IconRenderer({
       referrerPolicy="no-referrer"
       className={cx(
         'rs-icon-picker__renderer-image',
-        !color &&
-          (parsed.source === 'lucide' ||
-            parsed.source === 'mdi' ||
-            parsed.source === 'ph') &&
-          'rs-icon-picker__renderer-image--adaptive',
         className,
       )}
       style={{ width: renderedSize, height: renderedSize }}

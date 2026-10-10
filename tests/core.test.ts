@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { getIconUrl, parseIconValue, serializeIconValue } from '../src/core';
+import {
+  getIconUrl,
+  getSimpleIconNames,
+  parseIconValue,
+  serializeIconValue,
+} from '../src/core';
 
 describe('parseIconValue', () => {
   it.each([
@@ -70,5 +75,28 @@ describe('getIconUrl', () => {
 
   it('does not construct a URL for emoji', () => {
     expect(getIconUrl({ source: 'emoji', name: '🚀' })).toBeNull();
+  });
+
+  it('preserves legacy provider names after upstream renames', () => {
+    expect(getIconUrl({ source: 'dash', name: 'pihole' })).toContain(
+      '/pi-hole.svg',
+    );
+    expect(getIconUrl({ source: 'si', name: 'twitter' })).toContain('/x');
+  });
+});
+
+describe('getSimpleIconNames', () => {
+  it('normalizes current and legacy catalog response shapes', () => {
+    expect(
+      getSimpleIconNames({ uncategorized: ['github', 'visualstudiocode'] }),
+    ).toEqual(['github', 'visualstudiocode']);
+    expect(
+      getSimpleIconNames([{ title: '.NET' }, { title: 'Rocket.Chat' }]),
+    ).toEqual(['dotnet', 'rocketdotchat']);
+    expect(
+      getSimpleIconNames({
+        icons: [{ slug: 'custom-slug', title: 'Custom' }],
+      }),
+    ).toEqual(['custom-slug']);
   });
 });

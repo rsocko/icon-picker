@@ -4,4 +4,6 @@ demo-dist/
 coverage/
 *.tgz
 .package-check/
+artifacts/
+.impeccable/
 .DS_Store

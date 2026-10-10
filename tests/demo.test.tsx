@@ -19,7 +19,9 @@ beforeEach(() => {
           ? input.href
           : input.url;
     if (url.includes('tree.json')) return Promise.resolve(response({ svg: [] }));
-    if (url.includes('simple-icons.json')) return Promise.resolve(response([]));
+    if (url.includes('collection?prefix=simple-icons')) {
+      return Promise.resolve(response({ uncategorized: [] }));
+    }
     return Promise.resolve(response({ icons: [] }));
   });
 });
