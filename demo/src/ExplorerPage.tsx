@@ -227,6 +227,10 @@ function SearchGlyph() {
 }
 
 export function ExplorerPage() {
+  const guidedDemoUrl =
+    import.meta.env.BASE_URL === '/'
+      ? 'https://rsocko.github.io/icon-picker/'
+      : import.meta.env.BASE_URL;
   const [query, setQuery] = useState('');
   const [activeFilters, setActiveFilters] = useState<Set<IconSource>>(new Set());
   const [groups, setGroups] = useState<SourceGroup[]>([]);
@@ -521,7 +525,7 @@ export function ExplorerPage() {
         <div className="explorer-search-row">
           <a
             className="explorer-brand"
-            href={import.meta.env.BASE_URL}
+            href={guidedDemoUrl}
             aria-label="Back to icon picker demo"
           >
             <IconRenderer value="lucide:shapes" size={22} color="#dbeafe" label="" />
@@ -544,7 +548,7 @@ export function ExplorerPage() {
               </button>
             )}
           </label>
-          <a className="explorer-back" href={import.meta.env.BASE_URL}>
+          <a className="explorer-back" href={guidedDemoUrl}>
             Guided demo
           </a>
         </div>

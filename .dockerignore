@@ -1,0 +1,10 @@
+.git
+.github
+.package-check
+artifacts
+coverage
+demo-dist
+dist
+node_modules
+standalone-dist
+*.tgz
