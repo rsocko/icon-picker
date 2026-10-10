@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest';
 import { IconPicker } from '../src/IconPicker';
 import { IconPickerButton } from '../src/IconPickerButton';
+import type { IconPickerStyle } from '../src/types';
 
 function jsonResponse(body: unknown): Response {
   return {
@@ -29,6 +30,60 @@ function mockCatalogs() {
 }
 
 describe('IconPicker', () => {
+  it('inherits the host color scheme by default', async () => {
+    mockCatalogs();
+    const { container } = render(
+      <div style={{ colorScheme: 'dark' }}>
+        <IconPicker value={null} onChange={vi.fn()} />
+      </div>,
+    );
+
+    await waitFor(() =>
+      expect(container.querySelector('.rs-icon-picker')).toHaveAttribute(
+        'data-rs-icon-picker-theme',
+        'dark',
+      ),
+    );
+  });
+
+  it.each(['light', 'dark'] as const)(
+    'supports an explicit %s theme override',
+    async (theme) => {
+      mockCatalogs();
+      const { container } = render(
+        <div style={{ colorScheme: theme === 'light' ? 'dark' : 'light' }}>
+          <IconPicker value={null} onChange={vi.fn()} theme={theme} />
+        </div>,
+      );
+
+      await waitFor(() =>
+        expect(container.querySelector('.rs-icon-picker')).toHaveAttribute(
+          'data-rs-icon-picker-theme',
+          theme,
+        ),
+      );
+    },
+  );
+
+  it('accepts typed semantic style overrides', () => {
+    mockCatalogs();
+    const { container } = render(
+      <IconPicker
+        value={null}
+        onChange={vi.fn()}
+        style={{
+          '--rs-icon-picker-bg': '#101820',
+          '--rs-icon-picker-accent': '#ffb000',
+        }}
+      />,
+    );
+
+    expect(container.querySelector('.rs-icon-picker')).toHaveStyle({
+      '--rs-icon-picker-bg': '#101820',
+      '--rs-icon-picker-accent': '#ffb000',
+    });
+  });
+
   it('selects a popular emoji using an accessible button', () => {
     mockCatalogs();
     const onChange = vi.fn();
@@ -239,6 +294,33 @@ describe('IconPickerButton', () => {
     expect(onChange).toHaveBeenCalledWith('🚀');
     await waitFor(() => expect(trigger).toHaveFocus());
     expect(onOpenChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it('propagates the host theme and semantic variables into its portal', async () => {
+    mockCatalogs();
+    render(
+      <div
+        className="dark"
+        style={{
+          '--rs-icon-picker-bg': '#161b22',
+          '--rs-icon-picker-accent': '#58a6ff',
+        } as IconPickerStyle}
+      >
+        <IconPickerButton value={null} onChange={vi.fn()} />
+      </div>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pick an icon' }));
+    const popover = screen.getByRole('dialog', { name: 'Choose an icon' })
+      .parentElement;
+
+    await waitFor(() =>
+      expect(popover).toHaveAttribute('data-rs-icon-picker-theme', 'dark'),
+    );
+    expect(popover).toHaveStyle({
+      '--rs-icon-picker-bg': '#161b22',
+      '--rs-icon-picker-accent': '#58a6ff',
+    });
   });
 
   it('closes on Escape and does not open when disabled', () => {
