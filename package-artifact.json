@@ -1,0 +1,12 @@
+{
+  "name": "@rsocko/icon-picker",
+  "version": "0.1.0-rc.0",
+  "filename": "rsocko-icon-picker-0.1.0-rc.0.tgz",
+  "size": 39695,
+  "unpackedSize": 126787,
+  "entryCount": 36,
+  "integrity": "sha512-SVLC5q+B6vuWVabZgm2V6ugfiec8kLEhIBgl/+lZDZrsLWtUn6HucMNm2iBRx+l8GgEwXf8gAmklfrHOddtV8w==",
+  "shasum": "0b2db4385f35f5636b324285bd219b5c3310c8fe",
+  "sha256": "822dfdf28a4f8419c778d1e56b00d9628bcbe93918b672a9921c1eeb0ab921be",
+  "sha512": "4952c2e6af81eafb9655a6d9826d95eae81f89e73c90b121201825ffe9590d9aec2d6b549fa1ee70c366da2051c7e97c1a01305dff200269257eb1ce75db55f3"
+}

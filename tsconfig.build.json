@@ -4,6 +4,7 @@
     "declaration": true,
     "declarationMap": true,
     "emitDeclarationOnly": true,
+    "newLine": "lf",
     "outDir": "dist",
     "types": []
   },
