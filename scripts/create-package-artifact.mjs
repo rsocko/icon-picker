@@ -32,11 +32,12 @@ if (sourceCommit !== headCommit) {
 
 let sourceTag = process.env.SOURCE_TAG || null;
 if (!sourceTag) {
-  try {
-    sourceTag = git('describe', '--tags', '--exact-match');
-  } catch {
-    sourceTag = null;
-  }
+  const tags = git('tag', '--points-at', 'HEAD')
+    .split(/\r?\n/)
+    .filter(Boolean);
+  sourceTag = tags.includes(`v${packageJson.version}`)
+    ? `v${packageJson.version}`
+    : (tags[0] ?? null);
 }
 if (sourceTag && sourceTag !== `v${packageJson.version}`) {
   throw new Error(
