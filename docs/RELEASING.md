@@ -16,17 +16,29 @@ npm run check
 npm run package:artifact
 ```
 
-`package:artifact` builds the package, runs `npm pack` twice, and fails if the
-two tarballs differ. It writes these ignored local artifacts:
+`package:artifact` builds the package, copies only publishable files into a
+canonical staging tree, normalizes every staged text file to LF, runs
+`npm pack` twice, and fails if the two tarballs differ or do not match the
+committed [`package-artifact.json`](../package-artifact.json) contract. It
+writes these ignored local artifacts:
 
 - `artifacts/rsocko-icon-picker-<version>.tgz`
 - `artifacts/UPSTREAM.json`
 
+TypeScript declaration output is explicitly configured for LF newlines, and
+`.gitattributes` keeps tracked text inputs on LF across operating systems.
+CI executes the full package verification on both Ubuntu and Windows. Both
+jobs must reproduce the size, integrity, checksums, and entry counts committed
+in `package-artifact.json`; same-host repeatability alone is insufficient.
+The repository and release workflows pin npm `11.19.0`, so artifact bytes do
+not silently change with a runner image's bundled npm version.
+
 `UPSTREAM.json` is deterministic and machine-readable. It records the package
 identity, exact source commit and optional matching version tag, repository,
 npm integrity and shasum, SHA-256 and SHA-512 hashes, sizes, entry count, and
-the sorted package file manifest. The command refuses a dirty checkout and a
-tag that does not match `package.json`.
+the sorted package file manifest. It also records the canonicalization contract.
+The command refuses a dirty checkout and a tag that does not match
+`package.json`.
 
 A vendored consumer should commit the unpacked, verified publishable package
 plus its `UPSTREAM.json`, depend on that snapshot through a local `file:`
@@ -74,6 +86,11 @@ Published npm versions are immutable. If publication fails after a release is
 created, fix the cause and cut a new version rather than overwriting an
 existing package version.
 
+The release workflow's `npm publish` invokes `prepack`, which rebuilds before
+publishing. The LF source/declaration rules ensure that publish output matches
+the cross-platform artifact contract. Do not publish if either CI operating
+system reports a contract mismatch.
+
 ## Mission Control synchronization
 
 Mission Control tracks the verified local mirror in
@@ -83,4 +100,3 @@ runtime synchronization. Proxy availability is informational, not a
 prerequisite: Mission Control can consume the exact artifact generated above
 from the pinned source commit and later compare it with a mirrored npm artifact
 when that exact version becomes available.
-

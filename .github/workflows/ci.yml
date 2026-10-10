@@ -10,7 +10,11 @@ permissions:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -18,9 +22,13 @@ jobs:
           node-version: 22
           cache: npm
       - name: Enforce approved dependency registry
+        shell: pwsh
         run: |
           npm config set registry https://packagefeedproxy.microsoft.io/npm/
-          test "$(npm config get registry)" = "https://packagefeedproxy.microsoft.io/npm/"
+          if ((npm config get registry) -ne "https://packagefeedproxy.microsoft.io/npm/") {
+            throw "Approved registry configuration failed."
+          }
+      - run: npm install --global npm@11.19.0
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
