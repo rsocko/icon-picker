@@ -337,6 +337,34 @@ a {
   justify-content: center;
 }
 
+.explorer-icon-mask {
+  display: inline-block;
+  flex: 0 0 auto;
+  mask-position: center;
+  -webkit-mask-position: center;
+  mask-repeat: no-repeat;
+  -webkit-mask-repeat: no-repeat;
+  mask-size: contain;
+  -webkit-mask-size: contain;
+}
+
+.explorer-icon-placeholder {
+  display: inline-block;
+  border-radius: 8px;
+  background: #202939;
+  animation: explorer-pulse 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes explorer-pulse {
+  to { opacity: 0.45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .explorer-icon-placeholder {
+    animation: none;
+  }
+}
+
 .explorer-tile code {
   width: 100%;
   overflow: hidden;

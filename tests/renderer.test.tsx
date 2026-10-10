@@ -30,16 +30,29 @@ describe('IconRenderer', () => {
   });
 
   it('shows a fallback on error and recovers when the value changes', () => {
-    const { rerender } = render(
+    const { container, rerender } = render(
       <IconRenderer value="lucide:rocket" fallback={<span>Unavailable</span>} />,
     );
-    fireEvent.error(screen.getByRole('img', { name: 'lucide icon: rocket' }));
+    expect(screen.getByRole('img', { name: 'lucide icon: rocket' }).tagName).toBe(
+      'SPAN',
+    );
+    fireEvent.error(
+      container.querySelector('img[aria-hidden="true"]') as HTMLImageElement,
+    );
     expect(screen.getByText('Unavailable')).toBeInTheDocument();
 
     rerender(
       <IconRenderer value="mdi:home" fallback={<span>Unavailable</span>} />,
     );
     expect(screen.getByRole('img', { name: 'mdi icon: home' })).toBeInTheDocument();
+  });
+
+  it('inherits currentColor for uncolored monochrome icons', () => {
+    render(<IconRenderer value="lucide:rocket" size={24} />);
+    const icon = screen.getByRole('img', { name: 'lucide icon: rocket' });
+    expect(icon.tagName).toBe('SPAN');
+    expect(icon).toHaveClass('rs-icon-picker__renderer-mask');
+    expect(icon.style.maskImage).toContain('/lucide/rocket.svg');
   });
 
   it('uses the fallback for an unsafe provider value', () => {

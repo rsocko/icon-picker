@@ -1,4 +1,9 @@
-export { getIconUrl, parseIconValue, serializeIconValue } from './core';
+export {
+  getIconUrl,
+  getSimpleIconNames,
+  parseIconValue,
+  serializeIconValue,
+} from './core';
 export { IconPicker } from './IconPicker';
 export { IconPickerButton } from './IconPickerButton';
 export { IconRenderer } from './IconRenderer';

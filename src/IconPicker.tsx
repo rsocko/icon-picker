@@ -10,7 +10,12 @@ import {
 } from 'react';
 import type { EmojiClickData, Theme } from 'emoji-picker-react';
 import { cx } from './classnames';
-import { getIconUrl, parseIconValue, serializeIconValue } from './core';
+import {
+  getIconUrl,
+  getSimpleIconNames,
+  parseIconValue,
+  serializeIconValue,
+} from './core';
 import {
   ICON_COLORS,
   POPULAR_BY_SOURCE,
@@ -19,6 +24,8 @@ import {
   POPULAR_SIMPLE_ICONS,
   SOURCE_FILTERS,
 } from './data';
+import { iconMaskCacheKey, loadIconifyMasks } from './iconify';
+import { IconRenderer } from './IconRenderer';
 import type { IconPickerProps, IconSource, ParsedIcon } from './types';
 
 const EmojiBrowser = lazy(() => import('emoji-picker-react'));
@@ -138,25 +145,18 @@ async function fetchDashboardIcons(signal: AbortSignal): Promise<string[]> {
 
 async function fetchSimpleIcons(signal: AbortSignal): Promise<string[]> {
   const response = await fetch(
-    'https://cdn.jsdelivr.net/npm/simple-icons/_data/simple-icons.json',
+    'https://api.iconify.design/collection?prefix=simple-icons',
     { signal },
   );
   if (!response.ok) {
     throw new Error(`Simple Icons returned HTTP ${response.status}.`);
   }
 
-  const data: unknown = await response.json();
-  const icons = getArray(data) ?? getArrayProperty(data, 'icons');
-  if (!icons) {
+  const icons = getSimpleIconNames(await response.json());
+  if (icons.length === 0) {
     throw new Error('Simple Icons returned an invalid catalog.');
   }
-
-  return icons.flatMap((icon) => {
-    if (typeof icon !== 'object' || icon === null) return [];
-    const slug = 'slug' in icon && typeof icon.slug === 'string' ? icon.slug : null;
-    const title = 'title' in icon && typeof icon.title === 'string' ? icon.title : null;
-    return slug ? [slug] : title ? [title.toLowerCase().replace(/[^a-z0-9]/g, '')] : [];
-  });
+  return icons;
 }
 
 function getFocusableElements(container: HTMLElement): HTMLElement[] {
@@ -193,6 +193,7 @@ export const IconPicker = memo(function IconPicker({
   const [simpleIcons, setSimpleIcons] = useState<string[]>([]);
   const [showEmojiBrowser, setShowEmojiBrowser] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
+  const [iconMasks, setIconMasks] = useState<Record<string, string | null>>({});
 
   useEffect(() => {
     const controller = new AbortController();
@@ -336,6 +337,30 @@ export const IconPicker = memo(function IconPicker({
     0,
   );
 
+  useEffect(() => {
+    const controller = new AbortController();
+    const iconifyGroups = displayedGroups.filter((group) =>
+      ['lucide', 'mdi', 'ph'].includes(group.source),
+    );
+    if (iconifyGroups.length === 0) return () => controller.abort();
+
+    void Promise.all(
+      iconifyGroups.map((group) =>
+        loadIconifyMasks(group.source, group.icons, controller.signal),
+      ),
+    ).then((groups) => {
+      if (controller.signal.aborted) return;
+      setIconMasks((current) =>
+        groups.reduce<Record<string, string | null>>(
+          (combined, group) => ({ ...combined, ...group }),
+          current,
+        ),
+      );
+    });
+
+    return () => controller.abort();
+  }, [displayedGroups]);
+
   function toggleFilter(source: IconSource) {
     setActiveFilters((current) => {
       const next = new Set(current);
@@ -424,7 +449,11 @@ export const IconPicker = memo(function IconPicker({
         )}
       </div>
 
-      <div className="rs-icon-picker__filters" aria-label="Icon sources">
+      <div
+        className="rs-icon-picker__filters"
+        role="group"
+        aria-label="Icon sources"
+      >
         {SOURCE_FILTERS.map((source) => {
           const active = activeFilters.size === 0 || activeFilters.has(source.id);
           return (
@@ -447,20 +476,34 @@ export const IconPicker = memo(function IconPicker({
       {onColorChange && (
         <div className="rs-icon-picker__colors" aria-label="Icon color">
           <span>Color</span>
-          {ICON_COLORS.map((swatch) => (
+          <div className="rs-icon-picker__color-options">
             <button
-              key={swatch}
               type="button"
-              onClick={() => onColorChange(swatch)}
+              onClick={() => onColorChange('')}
               className={cx(
-                'rs-icon-picker__color',
-                color === swatch && 'rs-icon-picker__color--selected',
+                'rs-icon-picker__auto-color',
+                !color && 'rs-icon-picker__auto-color--selected',
               )}
-              style={{ backgroundColor: swatch }}
-              aria-label={`Set icon color to ${swatch}`}
-              aria-pressed={color === swatch}
-            />
-          ))}
+              aria-label="Use theme color"
+              aria-pressed={!color}
+            >
+              Auto
+            </button>
+            {ICON_COLORS.map((swatch) => (
+              <button
+                key={swatch}
+                type="button"
+                onClick={() => onColorChange(swatch)}
+                className={cx(
+                  'rs-icon-picker__color',
+                  color === swatch && 'rs-icon-picker__color--selected',
+                )}
+                style={{ backgroundColor: swatch }}
+                aria-label={`Set icon color to ${swatch}`}
+                aria-pressed={color === swatch}
+              />
+            ))}
+          </div>
         </div>
       )}
 
@@ -553,6 +596,7 @@ export const IconPicker = memo(function IconPicker({
                           ? undefined
                           : color
                       }
+                      maskUrl={iconMasks[iconMaskCacheKey(group.source, name)]}
                       selected={
                         selectedIcon?.source === group.source &&
                         selectedIcon.name === name
@@ -586,18 +630,21 @@ const IconGridItem = memo(function IconGridItem({
   source,
   color,
   selected,
+  maskUrl,
   onClick,
 }: {
   name: string;
   source: Exclude<IconSource, 'emoji'>;
   color?: string | undefined;
   selected: boolean;
+  maskUrl?: string | null | undefined;
   onClick: () => void;
 }) {
   const parsed: ParsedIcon = { source, name };
   const url = getIconUrl(parsed, color);
-  const [failed, setFailed] = useState(false);
   const value = serializeIconValue(parsed);
+  const isIconifyIcon =
+    source === 'lucide' || source === 'mdi' || source === 'ph';
 
   return (
     <button
@@ -608,7 +655,32 @@ const IconGridItem = memo(function IconGridItem({
       aria-pressed={selected}
       title={value}
     >
-      {url && !failed ? (
+      {isIconifyIcon && maskUrl ? (
+        <span
+          role="img"
+          aria-label={value}
+          className="rs-icon-picker__grid-mask"
+          style={{
+            backgroundColor: color || 'currentColor',
+            maskImage: `url("${maskUrl}")`,
+            WebkitMaskImage: `url("${maskUrl}")`,
+          }}
+        />
+      ) : isIconifyIcon && maskUrl === undefined ? (
+        <span className="rs-icon-picker__grid-placeholder" aria-hidden="true" />
+      ) : isIconifyIcon ? (
+        <IconRenderer
+          value={value}
+          size={22}
+          color={color}
+          label=""
+          fallback={
+            <span className="rs-icon-picker__broken-icon" aria-hidden="true">
+              !
+            </span>
+          }
+        />
+      ) : url ? (
         <img
           src={url}
           alt=""
@@ -617,7 +689,6 @@ const IconGridItem = memo(function IconGridItem({
           loading="lazy"
           decoding="async"
           referrerPolicy="no-referrer"
-          onError={() => setFailed(true)}
         />
       ) : (
         <span className="rs-icon-picker__broken-icon" aria-hidden="true">

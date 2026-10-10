@@ -9,6 +9,7 @@ import {
 import {
   IconRenderer,
   getIconUrl,
+  getSimpleIconNames,
   serializeIconValue,
   type IconSource,
   type ParsedIcon,
@@ -19,6 +20,7 @@ import {
   POPULAR_EMOJI,
   POPULAR_SIMPLE_ICONS,
 } from '../../src/data';
+import { iconMaskCacheKey, loadIconifyMasks } from '../../src/iconify';
 
 type CopyFormat = 'name' | 'svg' | 'url' | 'react' | 'css';
 type IconSize = 'sm' | 'md' | 'lg';
@@ -85,21 +87,6 @@ const EXTENDED_EMOJI = [
   '🦊',
 ];
 
-const SIMPLE_ICON_SLUG_REPLACEMENTS: Readonly<Record<string, string>> = {
-  '+': 'plus',
-  '.': 'dot',
-  '&': 'and',
-  đ: 'd',
-  ħ: 'h',
-  ı: 'i',
-  ĸ: 'k',
-  ŀ: 'l',
-  ł: 'l',
-  ß: 'ss',
-  ŧ: 't',
-  ø: 'o',
-};
-
 let emojiLibraryPromise: Promise<typeof import('emojilib')> | null = null;
 const searchCache = new Map<string, string[]>();
 
@@ -111,17 +98,6 @@ function getArrayProperty(value: unknown, key: string): unknown[] | null {
   if (typeof value !== 'object' || value === null) return null;
   const property: unknown = (value as Record<string, unknown>)[key];
   return getArray(property);
-}
-
-function simpleIconTitleToSlug(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(
-      /[+.&đħıĸŀłßŧø]/g,
-      (character) => SIMPLE_ICON_SLUG_REPLACEMENTS[character] ?? character,
-    )
-    .normalize('NFD')
-    .replace(/[^a-z\d]/g, '');
 }
 
 async function searchEmoji(query: string, limit: number): Promise<string[]> {
@@ -189,21 +165,15 @@ async function loadDashboardIcons(signal: AbortSignal): Promise<string[]> {
 
 async function loadSimpleIcons(signal: AbortSignal): Promise<string[]> {
   const response = await fetch(
-    'https://cdn.jsdelivr.net/npm/simple-icons/_data/simple-icons.json',
+    'https://api.iconify.design/collection?prefix=simple-icons',
     { signal },
   );
   if (!response.ok) {
     throw new Error(`Simple Icons returned HTTP ${response.status}.`);
   }
-  const data: unknown = await response.json();
-  const icons = getArray(data) ?? getArrayProperty(data, 'icons');
-  if (!icons) throw new Error('Simple Icons returned invalid data.');
-  return icons.flatMap((icon) => {
-    if (typeof icon !== 'object' || icon === null) return [];
-    const slug = 'slug' in icon && typeof icon.slug === 'string' ? icon.slug : null;
-    const title = 'title' in icon && typeof icon.title === 'string' ? icon.title : null;
-    return slug ? [slug] : title ? [simpleIconTitleToSlug(title)] : [];
-  });
+  const icons = getSimpleIconNames(await response.json());
+  if (icons.length === 0) throw new Error('Simple Icons returned invalid data.');
+  return icons;
 }
 
 async function getCopyValue(
@@ -270,6 +240,7 @@ export function ExplorerPage() {
   const [copyFormat, setCopyFormat] = useState<CopyFormat>('name');
   const [iconSize, setIconSize] = useState<IconSize>('md');
   const [copyStatus, setCopyStatus] = useState<CopyStatus | null>(null);
+  const [iconMasks, setIconMasks] = useState<Record<string, string | null>>({});
   const searchRef = useRef<HTMLInputElement>(null);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const copyAnnouncementSequence = useRef(0);
@@ -456,6 +427,30 @@ export function ExplorerPage() {
     0,
   );
   const size = ICON_SIZES[iconSize];
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const iconifyGroups = displayedGroups.filter((group) =>
+      ['lucide', 'mdi', 'ph'].includes(group.source),
+    );
+    if (iconifyGroups.length === 0) return () => controller.abort();
+
+    void Promise.all(
+      iconifyGroups.map((group) =>
+        loadIconifyMasks(group.source, group.icons, controller.signal),
+      ),
+    ).then((loadedMasks) => {
+      if (controller.signal.aborted) return;
+      setIconMasks((current) =>
+        loadedMasks.reduce<Record<string, string | null>>(
+          (combined, masks) => ({ ...combined, ...masks }),
+          current,
+        ),
+      );
+    });
+
+    return () => controller.abort();
+  }, [displayedGroups]);
 
   async function copyIcon(source: IconSource, name: string) {
     const selectedFormat = copyFormat;
@@ -680,6 +675,12 @@ export function ExplorerPage() {
               >
                 {group.icons.map((name) => {
                   const value = serializeIconValue({ source: group.source, name });
+                  const maskUrl =
+                    iconMasks[iconMaskCacheKey(group.source, name)];
+                  const isIconifyIcon =
+                    group.source === 'lucide' ||
+                    group.source === 'mdi' ||
+                    group.source === 'ph';
                   return (
                     <button
                       key={value}
@@ -693,13 +694,37 @@ export function ExplorerPage() {
                         className="explorer-icon"
                         style={{ width: size.icon, height: size.icon }}
                       >
-                        <IconRenderer
-                          value={value}
-                          size={size.icon * 0.82}
-                          color={group.source === 'dash' ? undefined : color}
-                          label=""
-                          fallback={<span className="tile-fallback">!</span>}
-                        />
+                        {isIconifyIcon && maskUrl ? (
+                          <span
+                            role="img"
+                            aria-label={value}
+                            className="explorer-icon-mask"
+                            style={{
+                              width: size.icon * 0.82,
+                              height: size.icon * 0.82,
+                              backgroundColor: color,
+                              maskImage: `url("${maskUrl}")`,
+                              WebkitMaskImage: `url("${maskUrl}")`,
+                            }}
+                          />
+                        ) : isIconifyIcon && maskUrl === undefined ? (
+                          <span
+                            className="explorer-icon-placeholder"
+                            aria-hidden="true"
+                            style={{
+                              width: size.icon * 0.82,
+                              height: size.icon * 0.82,
+                            }}
+                          />
+                        ) : (
+                          <IconRenderer
+                            value={value}
+                            size={size.icon * 0.82}
+                            color={group.source === 'dash' ? undefined : color}
+                            label=""
+                            fallback={<span className="tile-fallback">!</span>}
+                          />
+                        )}
                       </span>
                       <code>{name}</code>
                     </button>
