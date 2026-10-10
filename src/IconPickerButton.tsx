@@ -10,6 +10,10 @@ import { createPortal } from 'react-dom';
 import { cx } from './classnames';
 import { IconPicker } from './IconPicker';
 import { IconRenderer } from './IconRenderer';
+import {
+  copyIconPickerThemeStyle,
+  useResolvedIconPickerTheme,
+} from './theme';
 import type { IconPickerButtonProps } from './types';
 
 const SIZE_CONFIG = {
@@ -85,14 +89,25 @@ export function IconPickerButton({
   label = 'Pick an icon',
   portalTarget,
   pickerProps,
+  theme = 'auto',
+  style,
 }: IconPickerButtonProps) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<PickerPosition | null>(null);
+  const [triggerElement, setTriggerElement] = useState<HTMLButtonElement | null>(
+    null,
+  );
+  const [portalThemeStyle, setPortalThemeStyle] = useState({});
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const reactId = useId();
   const pickerId = `rs-icon-picker-${reactId.replace(/:/g, '')}`;
   const config = SIZE_CONFIG[size];
+  const resolvedTheme = useResolvedIconPickerTheme(theme, triggerElement);
+  const setTrigger = useCallback((element: HTMLButtonElement | null) => {
+    triggerRef.current = element;
+    setTriggerElement(element);
+  }, []);
 
   const setOpenAndNotify = useCallback(
     (nextOpen: boolean) => {
@@ -112,6 +127,7 @@ export function IconPickerButton({
 
   useBrowserLayoutEffect(() => {
     if (!open) return;
+    setPortalThemeStyle(copyIconPickerThemeStyle(triggerElement));
 
     function updatePosition() {
       const trigger = triggerRef.current;
@@ -146,7 +162,7 @@ export function IconPickerButton({
       window.removeEventListener('resize', updatePosition);
       window.removeEventListener('scroll', handleScroll, true);
     };
-  }, [open]);
+  }, [open, resolvedTheme, style, triggerElement]);
 
   useEffect(() => {
     if (!open) return;
@@ -170,7 +186,7 @@ export function IconPickerButton({
   return (
     <>
       <button
-        ref={triggerRef}
+        ref={setTrigger}
         type="button"
         onClick={() => {
           if (!disabled) setOpenAndNotify(!open);
@@ -186,6 +202,8 @@ export function IconPickerButton({
           config.className,
           className,
         )}
+        data-rs-icon-picker-theme={resolvedTheme}
+        style={style}
       >
         {value ? (
           <IconRenderer
@@ -209,8 +227,10 @@ export function IconPickerButton({
           <div
             ref={popoverRef}
             className="rs-icon-picker-popover"
+            data-rs-icon-picker-theme={resolvedTheme}
             onMouseDown={(event) => event.stopPropagation()}
             style={{
+              ...portalThemeStyle,
               top: position?.top ?? 0,
               left: position?.left ?? 0,
               width: position?.width ?? PICKER_WIDTH,
@@ -230,6 +250,7 @@ export function IconPickerButton({
               color={pickerColor}
               onColorChange={onColorChange}
               modal
+              theme={resolvedTheme}
             />
           </div>,
           portalHost,

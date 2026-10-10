@@ -9,8 +9,11 @@ export { IconPickerButton } from './IconPickerButton';
 export { IconRenderer } from './IconRenderer';
 export type {
   IconPickerButtonProps,
+  IconPickerCssVariable,
   IconPickerProps,
   IconPickerSize,
+  IconPickerStyle,
+  IconPickerTheme,
   IconRendererProps,
   IconSource,
   ParsedIcon,

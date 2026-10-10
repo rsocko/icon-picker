@@ -2,6 +2,7 @@ import {
   lazy,
   memo,
   Suspense,
+  useCallback,
   useEffect,
   useId,
   useMemo,
@@ -26,6 +27,7 @@ import {
 } from './data';
 import { iconMaskCacheKey, loadIconifyMasks } from './iconify';
 import { IconRenderer } from './IconRenderer';
+import { useResolvedIconPickerTheme } from './theme';
 import type { IconPickerProps, IconSource, ParsedIcon } from './types';
 
 const EmojiBrowser = lazy(() => import('emoji-picker-react'));
@@ -178,8 +180,16 @@ export const IconPicker = memo(function IconPicker({
   ariaLabel = 'Choose an icon',
   searchDebounceMs = 200,
   modal = false,
+  theme = 'auto',
+  style,
 }: IconPickerProps) {
+  const [rootElement, setRootElement] = useState<HTMLDivElement | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const resolvedTheme = useResolvedIconPickerTheme(theme, rootElement);
+  const setRoot = useCallback((element: HTMLDivElement | null) => {
+    rootRef.current = element;
+    setRootElement(element);
+  }, []);
   const searchRequestId = useRef(0);
   const generatedId = useId();
   const pickerId = id ?? `rs-icon-picker-${generatedId.replace(/:/g, '')}`;
@@ -408,9 +418,11 @@ export const IconPicker = memo(function IconPicker({
 
   return (
     <div
-      ref={rootRef}
+      ref={setRoot}
       id={pickerId}
       className={cx('rs-icon-picker', className)}
+      data-rs-icon-picker-theme={resolvedTheme}
+      style={style}
       role={modal ? 'dialog' : 'region'}
       aria-modal={modal || undefined}
       aria-label={ariaLabel}
@@ -529,7 +541,7 @@ export const IconPicker = memo(function IconPicker({
                   selectIcon('emoji', emojiData.emoji)
                 }
                 autoFocusSearch={false}
-                theme={'auto' as Theme}
+                theme={resolvedTheme as Theme}
                 height={400}
                 width="100%"
                 searchPlaceHolder="Search emoji..."

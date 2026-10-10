@@ -1,12 +1,12 @@
 {
   "name": "@rsocko/icon-picker",
-  "version": "0.1.0-rc.1",
-  "filename": "rsocko-icon-picker-0.1.0-rc.1.tgz",
-  "size": 39673,
-  "unpackedSize": 126775,
-  "entryCount": 36,
-  "integrity": "sha512-7B59wM2c9BAe1KVTgFKwkC+Rfq8MRJkLqVdF9DG2PVwyiOVe+GlJPyxhP05/AHuEUUjdVrNjtlzxKR2EQ941iA==",
-  "shasum": "c755b5e0880f6ff2d78202da95ef5352348aa7a0",
-  "sha256": "17daf9ee75353cb665ca8b35898483535c9db5caf0178de7bf17a388513c9336",
-  "sha512": "ec1e7dc0cd9cf4101ed4a5538052b0902f917eaf0c44990ba95745f431b63d5c3288e55ef869493f2c613f4e7f007b845148dd56b363b65cf1291d8443de3588"
+  "version": "0.1.0-rc.2",
+  "filename": "rsocko-icon-picker-0.1.0-rc.2.tgz",
+  "size": 43309,
+  "unpackedSize": 143023,
+  "entryCount": 38,
+  "integrity": "sha512-5XZGRJAXNP09f9rP6piLOqSq4OXv0/ZkxHgbe2Zf78TqudDUg44vPhkjUnRQMQu/dRT8uct/Gj5FuHHvQ19ZjA==",
+  "shasum": "5f20ec50dbb1402affac40d40bca37b7b62524f9",
+  "sha256": "6494359674d85fe8b4469893fee4bf28070d7ef5e3db3734095aadd97d0fa346",
+  "sha512": "e5764644901734fd3d7fdacfea988b3aa4aae0e5efd3f664c4781b7b665fefc4eab9d0d4838e2f3e1923527450310bbf7514fcb9cb7f1a3e45b871ef435f598c"
 }

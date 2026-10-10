@@ -4,6 +4,9 @@ export { IconPicker } from './IconPicker';
 export { IconPickerButton } from './IconPickerButton';
 export type {
   IconPickerButtonProps,
+  IconPickerCssVariable,
   IconPickerProps,
   IconPickerSize,
+  IconPickerStyle,
+  IconPickerTheme,
 } from './types';
