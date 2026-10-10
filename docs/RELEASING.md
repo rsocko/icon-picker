@@ -52,26 +52,20 @@ bounded payload, and verify provenance and file hashes locally. It does not
 require a sibling checkout, network access during normal installation, or
 GitHub Packages credentials.
 
-## Optional npm bootstrap
+## npm bootstrap
 
 The primary corporate development environment can restore dependencies only
 through `https://packagefeedproxy.microsoft.io/npm/`. Do not change the
 repository registry or add a fallback registry to work around mirror delay.
 
-The first npmjs publication, if desired, must be performed once from a trusted
-network that can authenticate to npmjs:
-
-1. Check out the exact reviewed release commit on `main`.
-2. Run `npm ci`, `npm run check`, and `npm run package:artifact`.
-3. Publish `0.1.0-rc.0` (or its documented successor) with
-   `npm publish --access public --tag next`.
-4. Confirm public access, then revoke any temporary token immediately.
-5. Configure npm Trusted Publishing for owner `rsocko`, repository
-   `icon-picker`, workflow `release.yml`, and environment `npm`.
+The initial `0.1.0-rc.0` publication was performed manually from a trusted
+network. npm Trusted Publishing is configured for owner `rsocko`, repository
+`icon-picker`, workflow `release.yml`, and environment `npm`.
 
 Never commit a token or paste one into issue, pull-request, or workflow logs.
-After bootstrap, `.github/workflows/release.yml` publishes via OIDC and npm
-provenance with no stored npm token.
+`.github/workflows/release.yml` publishes ongoing releases via OIDC and npm
+provenance with no stored npm token. The first automated validation release is
+`0.1.0-rc.1`.
 
 ## Ongoing tagged releases
 

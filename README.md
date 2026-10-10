@@ -4,8 +4,8 @@ A framework-neutral React icon picker with a portable string storage contract.
 Choose and render emoji, Lucide, Material Design Icons, Phosphor, Dashboard
 Icons, and Simple Icons without storing provider-specific objects.
 
-> The first proposed release is `0.1.0-rc.0`. The package is not published
-> until this repository's release setup and API have been reviewed.
+> The package is published as a prerelease on npm. Prerelease versions use the
+> `next` distribution tag while the API is being validated.
 
 ## Live demo
 
@@ -306,10 +306,9 @@ to `main` then deploy automatically, and `workflow_dispatch` supports a manual
 retry. Deployment is independent of npm publication.
 
 CI runs source, package, and static-demo checks and verifies the npm file
-manifest. The release
-workflow publishes only from a published GitHub release using npm trusted
-publishing and provenance. Before enabling a release, configure
-`@rsocko/icon-picker` on npm with:
+manifest. The release workflow publishes only from a published GitHub release
+using npm trusted publishing and provenance. The `@rsocko/icon-picker` trusted
+publisher is configured with:
 
 - GitHub organization/user: `rsocko`
 - Repository: `icon-picker`
@@ -317,7 +316,7 @@ publishing and provenance. Before enabling a release, configure
 - Environment: `npm`
 
 Then merge the reviewed release commit, tag the exact package version (for
-example `v0.1.0-rc.0`), and publish the matching GitHub release. No npm token is
+example `v0.1.0-rc.1`), and publish the matching GitHub release. No npm token is
 stored in this repository, and this branch does not publish anything.
 Prereleases are published under npm's `next` distribution tag; only stable
 versions receive `latest`.
