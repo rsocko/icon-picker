@@ -1,4 +1,11 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ExplorerPage } from '../demo/src/ExplorerPage';
 
@@ -75,6 +82,54 @@ describe('full-page explorer', () => {
     expect(screen.getByRole('heading', { name: 'Simple Icons' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'React' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'lg' })).toBeInTheDocument();
+  });
+
+  it('offers a complete provider catalog without requiring a search', async () => {
+    const defaultFetch = vi.mocked(fetch).getMockImplementation();
+    vi.mocked(fetch).mockImplementation((input) => {
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      if (url.includes('collection?prefix=lucide')) {
+        return Promise.resolve(
+          response({ uncategorized: ['catalog-only-icon', 'home'] }),
+        );
+      }
+      if (!defaultFetch) throw new Error('Missing default fetch mock.');
+      return defaultFetch(input);
+    });
+
+    render(<ExplorerPage />);
+    const lucideSection = screen
+      .getByRole('heading', { name: 'Lucide' })
+      .closest('section');
+    if (!lucideSection) throw new Error('Missing Lucide section.');
+    fireEvent.click(within(lucideSection).getByRole('button', { name: 'Browse all' }));
+
+    expect(
+      await screen.findByRole('button', {
+        name: 'Copy lucide:catalog-only-icon as name',
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Lucide', level: 1 })).toBeInTheDocument();
+  });
+
+  it('does not describe a failed provider catalog as loading', async () => {
+    render(<ExplorerPage />);
+    const mdiSection = screen.getByRole('heading', { name: 'MDI' }).closest('section');
+    if (!mdiSection) throw new Error('Missing MDI section.');
+    fireEvent.click(within(mdiSection).getByRole('button', { name: 'Browse all' }));
+
+    expect(
+      await screen.findByText('Could not load this provider’s catalog.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('MDI catalog unavailable')).toBeInTheDocument();
+    expect(
+      screen.queryByText('Loading the complete provider catalog'),
+    ).not.toBeInTheDocument();
   });
 
   it('copies the selected format and announces success', async () => {
