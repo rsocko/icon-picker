@@ -9,11 +9,15 @@ import {
 import {
   IconRenderer,
   getIconUrl,
-  getSimpleIconNames,
   serializeIconValue,
   type IconSource,
   type ParsedIcon,
 } from '../../src';
+import {
+  fetchDashboardCatalog,
+  fetchIconifyCatalog,
+  type IconCatalog,
+} from '../../src/catalogs';
 import {
   POPULAR_BY_SOURCE,
   POPULAR_DASHBOARD_ICONS,
@@ -146,36 +150,6 @@ async function searchIconify(
   return names;
 }
 
-async function loadDashboardIcons(signal: AbortSignal): Promise<string[]> {
-  const response = await fetch(
-    'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons@main/tree.json',
-    { signal },
-  );
-  if (!response.ok) {
-    throw new Error(`Dashboard catalog returned HTTP ${response.status}.`);
-  }
-  const data: unknown = await response.json();
-  const files = getArrayProperty(data, 'svg');
-  if (!files) throw new Error('Dashboard catalog returned invalid data.');
-  return files
-    .filter((file): file is string => typeof file === 'string' && file.endsWith('.svg'))
-    .map((file) => file.slice(0, -4))
-    .filter((name) => !name.endsWith('-light') && !name.endsWith('-dark'));
-}
-
-async function loadSimpleIcons(signal: AbortSignal): Promise<string[]> {
-  const response = await fetch(
-    'https://api.iconify.design/collection?prefix=simple-icons',
-    { signal },
-  );
-  if (!response.ok) {
-    throw new Error(`Simple Icons returned HTTP ${response.status}.`);
-  }
-  const icons = getSimpleIconNames(await response.json());
-  if (icons.length === 0) throw new Error('Simple Icons returned invalid data.');
-  return icons;
-}
-
 async function getCopyValue(
   source: IconSource,
   name: string,
@@ -226,6 +200,72 @@ function SearchGlyph() {
   );
 }
 
+function ExplorerTile({
+  source,
+  name,
+  size,
+  color,
+  copyFormat,
+  maskUrl,
+  onCopy,
+}: {
+  source: IconSource;
+  name: string;
+  size: { tile: number; icon: number };
+  color: string;
+  copyFormat: CopyFormat;
+  maskUrl: string | null | undefined;
+  onCopy: () => void;
+}) {
+  const value = serializeIconValue({ source, name });
+  const isIconifyIcon = source === 'lucide' || source === 'mdi' || source === 'ph';
+
+  return (
+    <button
+      type="button"
+      className="explorer-tile"
+      onClick={onCopy}
+      aria-label={`Copy ${value} as ${copyFormat}`}
+      title={value}
+    >
+      <span
+        className="explorer-icon"
+        style={{ width: size.icon, height: size.icon }}
+      >
+        {isIconifyIcon && maskUrl ? (
+          <span
+            role="img"
+            aria-label={value}
+            className="explorer-icon-mask"
+            style={{
+              width: size.icon * 0.82,
+              height: size.icon * 0.82,
+              backgroundColor: color,
+              maskImage: `url("${maskUrl}")`,
+              WebkitMaskImage: `url("${maskUrl}")`,
+            }}
+          />
+        ) : isIconifyIcon && maskUrl === undefined ? (
+          <span
+            className="explorer-icon-placeholder"
+            aria-hidden="true"
+            style={{ width: size.icon * 0.82, height: size.icon * 0.82 }}
+          />
+        ) : (
+          <IconRenderer
+            value={value}
+            size={size.icon * 0.82}
+            color={source === 'dash' || source === 'si' ? undefined : color}
+            label=""
+            fallback={<span className="tile-fallback">!</span>}
+          />
+        )}
+      </span>
+      <code>{name}</code>
+    </button>
+  );
+}
+
 export function ExplorerPage() {
   const guidedDemoUrl =
     import.meta.env.BASE_URL === '/'
@@ -236,6 +276,14 @@ export function ExplorerPage() {
   const [groups, setGroups] = useState<SourceGroup[]>([]);
   const [dashboardIcons, setDashboardIcons] = useState<string[]>([]);
   const [simpleIcons, setSimpleIcons] = useState<string[]>([]);
+  const [catalogs, setCatalogs] = useState<Partial<Record<IconSource, IconCatalog>>>(
+    {},
+  );
+  const [browseSource, setBrowseSource] = useState<IconSource | null>(null);
+  const [browseCategory, setBrowseCategory] = useState('all');
+  const [visibleBrowseCount, setVisibleBrowseCount] = useState(96);
+  const [browseLoading, setBrowseLoading] = useState(false);
+  const [browseError, setBrowseError] = useState(false);
   const [loading, setLoading] = useState(false);
   const [catalogError, setCatalogError] = useState(false);
   const [searchError, setSearchError] = useState(false);
@@ -249,21 +297,31 @@ export function ExplorerPage() {
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const copyAnnouncementSequence = useRef(0);
   const copyRequestSequence = useRef(0);
+  const browseRequestSequence = useRef(0);
   const copyController = useRef<AbortController | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
     void Promise.allSettled([
-      loadDashboardIcons(controller.signal),
-      loadSimpleIcons(controller.signal),
+      fetchDashboardCatalog(controller.signal),
+      fetchIconifyCatalog('si', controller.signal),
     ]).then(([dashboardResult, simpleResult]) => {
       if (controller.signal.aborted) return;
       if (dashboardResult.status === 'fulfilled') {
-        setDashboardIcons(dashboardResult.value);
+        setDashboardIcons(dashboardResult.value.icons);
       }
       if (simpleResult.status === 'fulfilled') {
-        setSimpleIcons(simpleResult.value);
+        setSimpleIcons(simpleResult.value.icons);
       }
+      setCatalogs((current) => ({
+        ...current,
+        ...(dashboardResult.status === 'fulfilled'
+          ? { dash: dashboardResult.value }
+          : {}),
+        ...(simpleResult.status === 'fulfilled'
+          ? { si: simpleResult.value }
+          : {}),
+      }));
       setCatalogError(
         dashboardResult.status === 'rejected' || simpleResult.status === 'rejected',
       );
@@ -280,6 +338,7 @@ export function ExplorerPage() {
 
   const toggleFilter = useCallback(
     (source: IconSource) => {
+      setBrowseSource(null);
       setActiveFilters((current) => {
         const next = new Set(current);
         if (next.has(source)) next.delete(source);
@@ -425,6 +484,42 @@ export function ExplorerPage() {
   }, [activeSources]);
 
   const displayedGroups = query.trim() ? groups : defaultGroups;
+  const browsedSource = browseSource
+    ? SOURCE_FILTERS.find((source) => source.id === browseSource)
+    : undefined;
+  const browseCatalog = browseSource ? catalogs[browseSource] : undefined;
+  const browseIcons = useMemo(
+    () =>
+      browseCatalog && browseCategory !== 'all'
+        ? browseCatalog.categories.find(
+            (category) => category.name === browseCategory,
+          )?.icons ?? []
+        : browseCatalog?.icons ?? [],
+    [browseCatalog, browseCategory],
+  );
+  const visibleBrowseIcons = useMemo(
+    () => browseIcons.slice(0, visibleBrowseCount),
+    [browseIcons, visibleBrowseCount],
+  );
+  const maskGroups = useMemo(
+    () =>
+      browseSource && !query.trim() && visibleBrowseIcons.length > 0
+        ? [
+            {
+              source: browseSource,
+              label: browsedSource?.label ?? browseSource,
+              icons: visibleBrowseIcons,
+            },
+          ]
+        : displayedGroups,
+    [
+      browseSource,
+      browsedSource?.label,
+      displayedGroups,
+      query,
+      visibleBrowseIcons,
+    ],
+  );
   const providerError = catalogError || searchError;
   const totalResults = displayedGroups.reduce(
     (count, group) => count + group.icons.length,
@@ -434,7 +529,7 @@ export function ExplorerPage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    const iconifyGroups = displayedGroups.filter((group) =>
+    const iconifyGroups = maskGroups.filter((group) =>
       ['lucide', 'mdi', 'ph'].includes(group.source),
     );
     if (iconifyGroups.length === 0) return () => controller.abort();
@@ -454,7 +549,7 @@ export function ExplorerPage() {
     });
 
     return () => controller.abort();
-  }, [displayedGroups]);
+  }, [maskGroups]);
 
   async function copyIcon(source: IconSource, name: string) {
     const selectedFormat = copyFormat;
@@ -516,6 +611,41 @@ export function ExplorerPage() {
     }
   }
 
+  async function browseAll(source: IconSource) {
+    const requestSequence = ++browseRequestSequence.current;
+    setBrowseSource(source);
+    setBrowseCategory('all');
+    setVisibleBrowseCount(96);
+    setBrowseError(false);
+    if (catalogs[source]) {
+      setBrowseLoading(false);
+      return;
+    }
+
+    setBrowseLoading(true);
+    try {
+      let catalog: IconCatalog;
+      if (source === 'emoji') {
+        emojiLibraryPromise ??= import('emojilib');
+        const { default: emojiLibrary } = await emojiLibraryPromise;
+        catalog = { icons: Object.keys(emojiLibrary), categories: [] };
+      } else if (source === 'dash') {
+        catalog = await fetchDashboardCatalog(new AbortController().signal);
+      } else {
+        catalog = await fetchIconifyCatalog(source, new AbortController().signal);
+      }
+      setCatalogs((current) => ({ ...current, [source]: catalog }));
+    } catch {
+      if (requestSequence === browseRequestSequence.current) {
+        setBrowseError(true);
+      }
+    } finally {
+      if (requestSequence === browseRequestSequence.current) {
+        setBrowseLoading(false);
+      }
+    }
+  }
+
   return (
     <div className="explorer">
       <a className="explorer-skip" href="#results">
@@ -560,6 +690,7 @@ export function ExplorerPage() {
               className={activeFilters.size === 0 ? 'active' : undefined}
               onClick={() => {
                 if (activeFilters.size === 0) return;
+                setBrowseSource(null);
                 setActiveFilters(new Set());
                 if (query.trim()) {
                   setGroups([]);
@@ -651,16 +782,123 @@ export function ExplorerPage() {
       <main id="results" className="explorer-results">
         <div className="results-summary" aria-live="polite">
           <span>
-            {query.trim()
+            {browseSource && !query.trim()
+              ? browseError
+                ? `${browsedSource?.label ?? browseSource} catalog unavailable`
+                : browseCatalog
+                ? `${browseIcons.length.toLocaleString()} ${browsedSource?.label ?? browseSource} icons`
+                : `Loading ${browsedSource?.label ?? browseSource} icons`
+              : query.trim()
               ? `${totalResults} results for “${query}” across ${displayedGroups.length} sources`
-              : `Popular icons from ${displayedGroups.length} sources — type to search`}
+              : `Popular icons from ${displayedGroups.length} sources — browse or search`}
           </span>
           {providerError && (
             <span className="provider-warning">Some remote providers are unavailable.</span>
           )}
         </div>
 
-        {loading && displayedGroups.length === 0 ? (
+        {browseSource && !query.trim() ? (
+          <section
+            className="explorer-browser"
+            aria-labelledby={`browse-${browseSource}`}
+          >
+            <div className="explorer-browser-heading">
+              <button type="button" onClick={() => setBrowseSource(null)}>
+                <span aria-hidden="true">←</span> All providers
+              </button>
+              <div>
+                <h1 id={`browse-${browseSource}`}>
+                  {browsedSource?.label ?? browseSource}
+                </h1>
+                <p>
+                  {browseCatalog
+                    ? `${browseCatalog.icons.length.toLocaleString()} icons in this provider`
+                    : browseError
+                      ? 'The remote provider did not return its catalog'
+                    : 'Loading the complete provider catalog'}
+                </p>
+              </div>
+            </div>
+
+            {browseCatalog && browseCatalog.categories.length > 0 && (
+              <div className="explorer-categories" aria-label="Icon categories">
+                <button
+                  type="button"
+                  className={browseCategory === 'all' ? 'active' : undefined}
+                  onClick={() => {
+                    setBrowseCategory('all');
+                    setVisibleBrowseCount(96);
+                  }}
+                  aria-pressed={browseCategory === 'all'}
+                >
+                  All
+                </button>
+                {browseCatalog.categories.map((category) => (
+                  <button
+                    key={category.name}
+                    type="button"
+                    className={browseCategory === category.name ? 'active' : undefined}
+                    onClick={() => {
+                      setBrowseCategory(category.name);
+                      setVisibleBrowseCount(96);
+                    }}
+                    aria-pressed={browseCategory === category.name}
+                  >
+                    {category.name}
+                    <span>{category.icons.length.toLocaleString()}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {browseLoading ? (
+              <div className="explorer-state" role="status">
+                <span className="explorer-spinner" /> Loading catalog…
+              </div>
+            ) : browseError || !browseCatalog ? (
+              <div className="explorer-state explorer-state-column">
+                <strong>Could not load this provider’s catalog.</strong>
+                <button type="button" onClick={() => void browseAll(browseSource)}>
+                  Try again
+                </button>
+              </div>
+            ) : (
+              <>
+                <div
+                  className="explorer-grid"
+                  style={{ '--tile-min': `${size.tile}px` } as CSSProperties}
+                >
+                  {visibleBrowseIcons.map((name) => (
+                    <ExplorerTile
+                      key={`${browseSource}:${name}`}
+                      source={browseSource}
+                      name={name}
+                      size={size}
+                      color={color}
+                      copyFormat={copyFormat}
+                      maskUrl={iconMasks[iconMaskCacheKey(browseSource, name)]}
+                      onCopy={() => void copyIcon(browseSource, name)}
+                    />
+                  ))}
+                </div>
+                {visibleBrowseCount < browseIcons.length && (
+                  <div className="explorer-load-more">
+                    <button
+                      type="button"
+                      onClick={() => setVisibleBrowseCount((count) => count + 96)}
+                    >
+                      Load 96 more
+                    </button>
+                    <span>
+                      Showing {visibleBrowseIcons.length.toLocaleString()} of{' '}
+                      {browseIcons.length.toLocaleString()}
+                    </span>
+                  </div>
+                )}
+              </>
+            )}
+          </section>
+        ) : loading && displayedGroups.length === 0 ? (
           <div className="explorer-state" role="status">
             <span className="explorer-spinner" /> Searching providers…
           </div>
@@ -672,68 +910,28 @@ export function ExplorerPage() {
               <div className="explorer-group-heading">
                 <h2>{group.label}</h2>
                 <span>{group.icons.length}</span>
+                {!query.trim() && (
+                  <button type="button" onClick={() => void browseAll(group.source)}>
+                    Browse all
+                  </button>
+                )}
               </div>
               <div
                 className="explorer-grid"
                 style={{ '--tile-min': `${size.tile}px` } as CSSProperties}
               >
-                {group.icons.map((name) => {
-                  const value = serializeIconValue({ source: group.source, name });
-                  const maskUrl =
-                    iconMasks[iconMaskCacheKey(group.source, name)];
-                  const isIconifyIcon =
-                    group.source === 'lucide' ||
-                    group.source === 'mdi' ||
-                    group.source === 'ph';
-                  return (
-                    <button
-                      key={value}
-                      type="button"
-                      className="explorer-tile"
-                      onClick={() => void copyIcon(group.source, name)}
-                      aria-label={`Copy ${value} as ${copyFormat}`}
-                      title={value}
-                    >
-                      <span
-                        className="explorer-icon"
-                        style={{ width: size.icon, height: size.icon }}
-                      >
-                        {isIconifyIcon && maskUrl ? (
-                          <span
-                            role="img"
-                            aria-label={value}
-                            className="explorer-icon-mask"
-                            style={{
-                              width: size.icon * 0.82,
-                              height: size.icon * 0.82,
-                              backgroundColor: color,
-                              maskImage: `url("${maskUrl}")`,
-                              WebkitMaskImage: `url("${maskUrl}")`,
-                            }}
-                          />
-                        ) : isIconifyIcon && maskUrl === undefined ? (
-                          <span
-                            className="explorer-icon-placeholder"
-                            aria-hidden="true"
-                            style={{
-                              width: size.icon * 0.82,
-                              height: size.icon * 0.82,
-                            }}
-                          />
-                        ) : (
-                          <IconRenderer
-                            value={value}
-                            size={size.icon * 0.82}
-                            color={group.source === 'dash' ? undefined : color}
-                            label=""
-                            fallback={<span className="tile-fallback">!</span>}
-                          />
-                        )}
-                      </span>
-                      <code>{name}</code>
-                    </button>
-                  );
-                })}
+                {group.icons.map((name) => (
+                  <ExplorerTile
+                    key={`${group.source}:${name}`}
+                    source={group.source}
+                    name={name}
+                    size={size}
+                    color={color}
+                    copyFormat={copyFormat}
+                    maskUrl={iconMasks[iconMaskCacheKey(group.source, name)]}
+                    onCopy={() => void copyIcon(group.source, name)}
+                  />
+                ))}
               </div>
             </section>
           ))

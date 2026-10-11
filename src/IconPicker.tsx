@@ -10,10 +10,14 @@ import {
   useState,
 } from 'react';
 import type { EmojiClickData, Theme } from 'emoji-picker-react';
+import {
+  fetchDashboardCatalog,
+  fetchIconifyCatalog,
+  type IconCatalog,
+} from './catalogs';
 import { cx } from './classnames';
 import {
   getIconUrl,
-  getSimpleIconNames,
   parseIconValue,
   serializeIconValue,
 } from './core';
@@ -124,43 +128,6 @@ async function searchIconify(
   return names;
 }
 
-async function fetchDashboardIcons(signal: AbortSignal): Promise<string[]> {
-  const response = await fetch(
-    'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons@main/tree.json',
-    { signal },
-  );
-  if (!response.ok) {
-    throw new Error(`Dashboard Icons returned HTTP ${response.status}.`);
-  }
-
-  const data: unknown = await response.json();
-  const svgFiles = getArrayProperty(data, 'svg');
-  if (!svgFiles) {
-    throw new Error('Dashboard Icons returned an invalid catalog.');
-  }
-
-  return svgFiles
-    .filter((file): file is string => typeof file === 'string' && file.endsWith('.svg'))
-    .map((file) => file.slice(0, -4))
-    .filter((name) => !name.endsWith('-light') && !name.endsWith('-dark'));
-}
-
-async function fetchSimpleIcons(signal: AbortSignal): Promise<string[]> {
-  const response = await fetch(
-    'https://api.iconify.design/collection?prefix=simple-icons',
-    { signal },
-  );
-  if (!response.ok) {
-    throw new Error(`Simple Icons returned HTTP ${response.status}.`);
-  }
-
-  const icons = getSimpleIconNames(await response.json());
-  if (icons.length === 0) {
-    throw new Error('Simple Icons returned an invalid catalog.');
-  }
-  return icons;
-}
-
 function getFocusableElements(container: HTMLElement): HTMLElement[] {
   return Array.from(
     container.querySelectorAll<HTMLElement>(
@@ -191,6 +158,7 @@ export const IconPicker = memo(function IconPicker({
     setRootElement(element);
   }, []);
   const searchRequestId = useRef(0);
+  const browseRequestId = useRef(0);
   const generatedId = useId();
   const pickerId = id ?? `rs-icon-picker-${generatedId.replace(/:/g, '')}`;
   const [query, setQuery] = useState('');
@@ -201,6 +169,16 @@ export const IconPicker = memo(function IconPicker({
   const [catalogWarning, setCatalogWarning] = useState(false);
   const [dashboardIcons, setDashboardIcons] = useState<string[]>([]);
   const [simpleIcons, setSimpleIcons] = useState<string[]>([]);
+  const [catalogs, setCatalogs] = useState<
+    Partial<Record<Exclude<IconSource, 'emoji'>, IconCatalog>>
+  >({});
+  const [browseSource, setBrowseSource] = useState<
+    Exclude<IconSource, 'emoji'> | null
+  >(null);
+  const [browseCategory, setBrowseCategory] = useState('all');
+  const [visibleBrowseCount, setVisibleBrowseCount] = useState(96);
+  const [browseLoading, setBrowseLoading] = useState(false);
+  const [browseError, setBrowseError] = useState(false);
   const [showEmojiBrowser, setShowEmojiBrowser] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [iconMasks, setIconMasks] = useState<Record<string, string | null>>({});
@@ -208,17 +186,26 @@ export const IconPicker = memo(function IconPicker({
   useEffect(() => {
     const controller = new AbortController();
     void Promise.allSettled([
-      fetchDashboardIcons(controller.signal),
-      fetchSimpleIcons(controller.signal),
+      fetchDashboardCatalog(controller.signal),
+      fetchIconifyCatalog('si', controller.signal),
     ]).then(([dashboardResult, simpleResult]) => {
       if (controller.signal.aborted) return;
 
       if (dashboardResult.status === 'fulfilled') {
-        setDashboardIcons(dashboardResult.value);
+        setDashboardIcons(dashboardResult.value.icons);
       }
       if (simpleResult.status === 'fulfilled') {
-        setSimpleIcons(simpleResult.value);
+        setSimpleIcons(simpleResult.value.icons);
       }
+      setCatalogs((current) => ({
+        ...current,
+        ...(dashboardResult.status === 'fulfilled'
+          ? { dash: dashboardResult.value }
+          : {}),
+        ...(simpleResult.status === 'fulfilled'
+          ? { si: simpleResult.value }
+          : {}),
+      }));
       setCatalogWarning(
         dashboardResult.status === 'rejected' || simpleResult.status === 'rejected',
       );
@@ -342,6 +329,42 @@ export const IconPicker = memo(function IconPicker({
   const selectedIcon = parseIconValue(value);
   const isSearching = query.trim().length > 0;
   const displayedGroups = isSearching ? sourceGroups : defaultGroups;
+  const browsedSource = browseSource
+    ? SOURCE_FILTERS.find((source) => source.id === browseSource)
+    : undefined;
+  const browseCatalog = browseSource ? catalogs[browseSource] : undefined;
+  const browseIcons = useMemo(
+    () =>
+      browseCatalog && browseCategory !== 'all'
+        ? browseCatalog.categories.find(
+            (category) => category.name === browseCategory,
+          )?.icons ?? []
+        : browseCatalog?.icons ?? [],
+    [browseCatalog, browseCategory],
+  );
+  const visibleBrowseIcons = useMemo(
+    () => browseIcons.slice(0, visibleBrowseCount),
+    [browseIcons, visibleBrowseCount],
+  );
+  const maskGroups = useMemo(
+    () =>
+      browseSource && !isSearching && visibleBrowseIcons.length > 0
+        ? [
+            {
+              source: browseSource,
+              label: browsedSource?.label ?? browseSource,
+              icons: visibleBrowseIcons,
+            },
+          ]
+        : displayedGroups,
+    [
+      browseSource,
+      browsedSource?.label,
+      displayedGroups,
+      isSearching,
+      visibleBrowseIcons,
+    ],
+  );
   const resultCount = displayedGroups.reduce(
     (total, group) => total + group.icons.length,
     0,
@@ -349,7 +372,7 @@ export const IconPicker = memo(function IconPicker({
 
   useEffect(() => {
     const controller = new AbortController();
-    const iconifyGroups = displayedGroups.filter((group) =>
+    const iconifyGroups = maskGroups.filter((group) =>
       ['lucide', 'mdi', 'ph'].includes(group.source),
     );
     if (iconifyGroups.length === 0) return () => controller.abort();
@@ -369,9 +392,11 @@ export const IconPicker = memo(function IconPicker({
     });
 
     return () => controller.abort();
-  }, [displayedGroups]);
+  }, [maskGroups]);
 
   function toggleFilter(source: IconSource) {
+    setBrowseSource(null);
+    setShowEmojiBrowser(false);
     setActiveFilters((current) => {
       const next = new Set(current);
       if (next.has(source)) next.delete(source);
@@ -392,6 +417,39 @@ export const IconPicker = memo(function IconPicker({
 
   function selectIcon(source: IconSource, name: string) {
     onChange(serializeIconValue({ source, name }));
+  }
+
+  async function browseAll(source: IconSource) {
+    const requestId = ++browseRequestId.current;
+    setBrowseCategory('all');
+    setVisibleBrowseCount(96);
+    setBrowseError(false);
+    if (source === 'emoji') {
+      setShowEmojiBrowser(true);
+      setBrowseSource(null);
+      return;
+    }
+
+    setShowEmojiBrowser(false);
+    setBrowseSource(source);
+    if (catalogs[source]) {
+      setBrowseLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setBrowseLoading(true);
+    try {
+      const catalog =
+        source === 'dash'
+          ? await fetchDashboardCatalog(controller.signal)
+          : await fetchIconifyCatalog(source, controller.signal);
+      setCatalogs((current) => ({ ...current, [source]: catalog }));
+    } catch {
+      if (requestId === browseRequestId.current) setBrowseError(true);
+    } finally {
+      if (requestId === browseRequestId.current) setBrowseLoading(false);
+    }
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
@@ -549,6 +607,116 @@ export const IconPicker = memo(function IconPicker({
               />
             </Suspense>
           </>
+        ) : browseSource && !isSearching ? (
+          <section
+            className="rs-icon-picker__browser"
+            aria-labelledby={`${pickerId}-browse-${browseSource}`}
+          >
+            <div className="rs-icon-picker__browser-heading">
+              <button
+                type="button"
+                className="rs-icon-picker__back"
+                onClick={() => setBrowseSource(null)}
+              >
+                Back
+              </button>
+              <div>
+                <h2 id={`${pickerId}-browse-${browseSource}`}>
+                  {browsedSource?.label ?? browseSource}
+                </h2>
+                {browseCatalog && (
+                  <span>{browseIcons.length.toLocaleString()} icons</span>
+                )}
+              </div>
+            </div>
+
+            {browseCatalog && browseCatalog.categories.length > 0 && (
+              <div className="rs-icon-picker__categories" aria-label="Icon categories">
+                <button
+                  type="button"
+                  className={cx(
+                    'rs-icon-picker__category',
+                    browseCategory === 'all' && 'rs-icon-picker__category--active',
+                  )}
+                  onClick={() => {
+                    setBrowseCategory('all');
+                    setVisibleBrowseCount(96);
+                  }}
+                  aria-pressed={browseCategory === 'all'}
+                >
+                  All
+                </button>
+                {browseCatalog.categories.map((category) => (
+                  <button
+                    key={category.name}
+                    type="button"
+                    className={cx(
+                      'rs-icon-picker__category',
+                      browseCategory === category.name &&
+                        'rs-icon-picker__category--active',
+                    )}
+                    onClick={() => {
+                      setBrowseCategory(category.name);
+                      setVisibleBrowseCount(96);
+                    }}
+                    aria-pressed={browseCategory === category.name}
+                  >
+                    {category.name}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {browseLoading ? (
+              <div className="rs-icon-picker__state" role="status">
+                <Spinner /> Loading {browsedSource?.label ?? 'icons'}...
+              </div>
+            ) : browseError || !browseCatalog ? (
+              <div className="rs-icon-picker__state">
+                <span>Could not load this catalog.</span>
+                <button type="button" onClick={() => void browseAll(browseSource)}>
+                  Retry
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="rs-icon-picker__grid">
+                  {visibleBrowseIcons.map((name) => (
+                    <IconGridItem
+                      key={`${browseSource}:${name}`}
+                      name={name}
+                      source={browseSource}
+                      color={
+                        browseSource === 'dash' || browseSource === 'si'
+                          ? undefined
+                          : color
+                      }
+                      maskUrl={iconMasks[iconMaskCacheKey(browseSource, name)]}
+                      selected={
+                        selectedIcon?.source === browseSource &&
+                        selectedIcon.name === name
+                      }
+                      onClick={() => selectIcon(browseSource, name)}
+                    />
+                  ))}
+                </div>
+                {visibleBrowseCount < browseIcons.length && (
+                  <div className="rs-icon-picker__load-more">
+                    <button
+                      type="button"
+                      onClick={() => setVisibleBrowseCount((count) => count + 96)}
+                    >
+                      Load 96 more
+                    </button>
+                    <span>
+                      Showing {visibleBrowseIcons.length.toLocaleString()} of{' '}
+                      {browseIcons.length.toLocaleString()}
+                    </span>
+                  </div>
+                )}
+              </>
+            )}
+          </section>
         ) : loading && displayedGroups.length === 0 ? (
           <div className="rs-icon-picker__state" role="status">
             <Spinner /> Searching...
@@ -572,8 +740,8 @@ export const IconPicker = memo(function IconPicker({
               <div className="rs-icon-picker__group-heading">
                 <h2 id={`${pickerId}-${group.source}`}>{group.label}</h2>
                 <span>{group.icons.length}</span>
-                {group.source === 'emoji' && !isSearching && (
-                  <button type="button" onClick={() => setShowEmojiBrowser(true)}>
+                {!isSearching && (
+                  <button type="button" onClick={() => void browseAll(group.source)}>
                     Browse all
                   </button>
                 )}

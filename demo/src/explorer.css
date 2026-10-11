@@ -299,6 +299,119 @@ a {
   font-size: 10px;
 }
 
+.explorer-group-heading button,
+.explorer-browser-heading button,
+.explorer-load-more button,
+.explorer-state button {
+  border: 0;
+  background: transparent;
+  color: #72adff;
+  cursor: pointer;
+}
+
+.explorer-group-heading button {
+  margin-left: auto;
+  padding: 4px 7px;
+  border-radius: 6px;
+  font-size: 11px;
+}
+
+.explorer-group-heading button:hover,
+.explorer-group-heading button:focus-visible {
+  outline: none;
+  background: rgb(59 130 246 / 0.11);
+}
+
+.explorer-browser-heading {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 5px 0 18px;
+}
+
+.explorer-browser-heading button {
+  flex: 0 0 auto;
+  padding: 7px 9px;
+  border: 1px solid #202a3c;
+  border-radius: 8px;
+  background: #0d121d;
+  font-size: 11px;
+}
+
+.explorer-browser-heading h1 {
+  margin: 0 0 3px;
+  color: #e5eaf3;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+}
+
+.explorer-browser-heading p {
+  margin: 0;
+  color: #69768d;
+  font-size: 11px;
+}
+
+.explorer-categories {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding-bottom: 8px;
+  overflow-x: auto;
+  scrollbar-color: #26334a transparent;
+  scrollbar-width: thin;
+}
+
+.explorer-categories button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 9px;
+  border: 1px solid #202a3c;
+  border-radius: 8px;
+  background: #0d121d;
+  color: #738098;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.explorer-categories button:hover,
+.explorer-categories button:focus-visible,
+.explorer-categories button.active {
+  border-color: rgb(59 130 246 / 0.42);
+  outline: none;
+  background: rgb(59 130 246 / 0.11);
+  color: #72adff;
+}
+
+.explorer-categories button span {
+  color: #526078;
+  font-size: 9px;
+}
+
+.explorer-load-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 7px;
+  padding: 26px 0 4px;
+}
+
+.explorer-load-more button,
+.explorer-state button {
+  padding: 8px 13px;
+  border: 1px solid rgb(59 130 246 / 0.36);
+  border-radius: 8px;
+  background: rgb(59 130 246 / 0.09);
+  font-size: 11px;
+}
+
+.explorer-load-more span {
+  color: #65728a;
+  font-size: 10px;
+}
+
 .explorer-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(var(--tile-min), 1fr));
@@ -393,6 +506,15 @@ a {
   gap: 9px;
   color: #71809a;
   font-size: 13px;
+}
+
+.explorer-state-column {
+  flex-direction: column;
+}
+
+.explorer-state strong {
+  color: #aeb9cb;
+  font-weight: 600;
 }
 
 .explorer-spinner {

@@ -246,6 +246,79 @@
   font-size: 12px;
 }
 
+.rs-icon-picker__browser-heading {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 6px;
+  border-bottom: 1px solid var(--rs-icon-picker-border, light-dark(#dbe2ea, #334155));
+  background: var(--rs-icon-picker-surface, light-dark(#f8fafc, #0f172a));
+}
+
+.rs-icon-picker__browser-heading > div {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.rs-icon-picker__browser-heading h2 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.rs-icon-picker__browser-heading span,
+.rs-icon-picker__load-more span {
+  color: var(--rs-icon-picker-muted, light-dark(#64748b, #94a3b8));
+  font-size: 10px;
+}
+
+.rs-icon-picker__categories {
+  display: flex;
+  gap: 5px;
+  padding: 7px 8px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--rs-icon-picker-border, light-dark(#dbe2ea, #334155));
+  scrollbar-width: thin;
+}
+
+.rs-icon-picker__category {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border: 1px solid var(--rs-icon-picker-border, light-dark(#dbe2ea, #334155));
+  border-radius: 6px;
+  background: transparent;
+  color: var(--rs-icon-picker-muted, light-dark(#64748b, #94a3b8));
+  cursor: pointer;
+  font-size: 10px;
+}
+
+.rs-icon-picker__category:hover,
+.rs-icon-picker__category--active {
+  border-color: color-mix(in srgb, var(--rs-icon-picker-accent, light-dark(#2563eb, #60a5fa)) 40%, transparent);
+  background: color-mix(in srgb, var(--rs-icon-picker-accent, light-dark(#2563eb, #60a5fa)) 10%, transparent);
+  color: var(--rs-icon-picker-accent, light-dark(#2563eb, #60a5fa));
+}
+
+.rs-icon-picker__load-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px;
+}
+
+.rs-icon-picker__load-more button {
+  padding: 6px 12px;
+  border: 1px solid var(--rs-icon-picker-border, light-dark(#dbe2ea, #334155));
+  border-radius: 7px;
+  background: var(--rs-icon-picker-surface, light-dark(#f8fafc, #0f172a));
+  color: var(--rs-icon-picker-accent, light-dark(#2563eb, #60a5fa));
+  cursor: pointer;
+  font-size: 11px;
+}
+
 .rs-icon-picker__group {
   border-bottom: 1px solid var(--rs-icon-picker-border, light-dark(#dbe2ea, #334155));
 }

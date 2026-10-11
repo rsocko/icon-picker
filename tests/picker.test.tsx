@@ -1,4 +1,11 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { IconPicker } from '../src/IconPicker';
 import { IconPickerButton } from '../src/IconPickerButton';
@@ -107,6 +114,69 @@ describe('IconPicker', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Select lucide:rocket' }));
     expect(onChange).toHaveBeenCalledWith('lucide:rocket');
+  });
+
+  it('browses the complete catalog without requiring a search', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const url = requestUrl(input);
+      if (url.includes('tree.json')) return Promise.resolve(jsonResponse({ svg: [] }));
+      if (url.includes('collection?prefix=simple-icons')) {
+        return Promise.resolve(jsonResponse({ uncategorized: [] }));
+      }
+      if (url.includes('collection?prefix=lucide')) {
+        return Promise.resolve(
+          jsonResponse({ uncategorized: ['catalog-only-icon', 'home'] }),
+        );
+      }
+      return Promise.resolve(jsonResponse({ icons: {} }));
+    });
+
+    render(<IconPicker value={null} onChange={vi.fn()} />);
+    const lucideSection = screen
+      .getByRole('heading', { name: 'Lucide' })
+      .closest('section');
+    if (!lucideSection) throw new Error('Missing Lucide section.');
+    fireEvent.click(within(lucideSection).getByRole('button', { name: 'Browse all' }));
+
+    expect(
+      await screen.findByRole('button', {
+        name: 'Select lucide:catalog-only-icon',
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('2 icons')).toBeInTheDocument();
+  });
+
+  it('shows provider categories when the catalog supplies them', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const url = requestUrl(input);
+      if (url.includes('tree.json')) return Promise.resolve(jsonResponse({ svg: [] }));
+      if (url.includes('collection?prefix=simple-icons')) {
+        return Promise.resolve(jsonResponse({ uncategorized: [] }));
+      }
+      if (url.includes('collection?prefix=mdi')) {
+        return Promise.resolve(
+          jsonResponse({
+            uncategorized: ['home'],
+            categories: {
+              Animals: ['cat', 'dog'],
+              Arrows: ['arrow-left'],
+            },
+          }),
+        );
+      }
+      return Promise.resolve(jsonResponse({ icons: {} }));
+    });
+
+    render(<IconPicker value={null} onChange={vi.fn()} />);
+    const mdiSection = screen.getByRole('heading', { name: 'Material' }).closest('section');
+    if (!mdiSection) throw new Error('Missing Material section.');
+    fireEvent.click(within(mdiSection).getByRole('button', { name: 'Browse all' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Animals' }));
+
+    expect(screen.getByRole('button', { name: 'Select mdi:cat' })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Select mdi:arrow-left' }),
+    ).not.toBeInTheDocument();
   });
 
   it('exposes color swatches as pressed buttons', () => {
