@@ -25,11 +25,22 @@ a live container smoke test before publishing the multi-platform
 ghcr.io/rsocko/icon-picker
 ```
 
-Pushes to `main` publish `edge` and `sha-<full-git-sha>`. A matching
-`v<package-version>` tag additionally publishes the exact SemVer tag. Stable
-releases also publish major/minor, major, and `latest` aliases.
-Deployments should pin either the `sha-<full-git-sha>` tag or the digest emitted
-in the workflow summary, for example:
+Pushes to `main` publish `latest`, `edge`, and `sha-<full-git-sha>`. The
+`latest` tag is owned exclusively by successful default-branch builds, so
+publishing an older version tag cannot move it backward. A matching
+`v<package-version>` tag additionally publishes the exact SemVer tag, and
+stable releases publish major/minor and major aliases.
+
+Deployments that intentionally follow `main` can use:
+
+```text
+ghcr.io/rsocko/icon-picker:latest
+```
+
+Redeploying such a workload must pull the tag again and recreate the container.
+Deployments requiring an immutable version should pin either the
+`sha-<full-git-sha>` tag or the digest emitted in the workflow summary, for
+example:
 
 ```text
 ghcr.io/rsocko/icon-picker:sha-0123456789abcdef0123456789abcdef01234567
