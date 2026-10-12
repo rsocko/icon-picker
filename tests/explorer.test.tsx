@@ -147,6 +147,61 @@ describe('full-page explorer', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Copied url');
   });
 
+  it('opens discoverable per-icon actions and the export inspector', () => {
+    render(<ExplorerPage />);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'More actions for lucide:home' }),
+    );
+
+    const menu = screen.getByRole('menu', { name: 'lucide:home' });
+    expect(within(menu).getByRole('menuitem', { name: 'Copy SVG' })).toBeEnabled();
+    expect(
+      within(menu).getByRole('menuitem', {
+        name: /Copy image Not supported by this browser/,
+      }),
+    ).toBeDisabled();
+    fireEvent.click(
+      within(menu).getByRole('menuitem', { name: 'Export options…' }),
+    );
+
+    const panel = screen.getByRole('dialog', { name: 'home' });
+    expect(within(panel).getByRole('heading', { name: 'Copy' })).toBeInTheDocument();
+    expect(
+      within(panel).getByRole('heading', { name: 'Download' }),
+    ).toBeInTheDocument();
+    expect(within(panel).getByRole('heading', { name: 'Code' })).toBeInTheDocument();
+    expect(
+      within(panel).getByRole('button', { name: 'PNG image' }),
+    ).toBeDisabled();
+  });
+
+  it('opens the same action menu from a pointer context menu', () => {
+    render(<ExplorerPage />);
+    fireEvent.contextMenu(
+      screen.getByRole('button', { name: 'Copy lucide:home as name' }),
+    );
+    expect(
+      screen.getByRole('menu', { name: 'lucide:home' }),
+    ).toBeInTheDocument();
+  });
+
+  it('explains provider limits for emoji exports', () => {
+    render(<ExplorerPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'More actions for 🚀' }));
+    const menu = screen.getByRole('menu', { name: '🚀' });
+    expect(
+      within(menu).getByRole('menuitem', {
+        name: /Copy SVG Unavailable for emoji/,
+      }),
+    ).toBeDisabled();
+    fireEvent.click(
+      within(menu).getByRole('menuitem', { name: 'Export options…' }),
+    );
+    expect(
+      screen.getByText(/Emoji PNG appearance follows this device/),
+    ).toBeInTheDocument();
+  });
+
   it('fetches and copies SVG markup for the SVG format', async () => {
     render(<ExplorerPage />);
     fireEvent.click(screen.getByRole('button', { name: 'SVG' }));
