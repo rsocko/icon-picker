@@ -1,5 +1,6 @@
 import { appendFile } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
+import { getRetryDelayMilliseconds } from './retry-after.mjs';
 
 const providers = [
   {
@@ -45,19 +46,27 @@ async function fetchJson(provider) {
   let lastError;
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    let retryDelayMilliseconds = null;
     try {
       const response = await fetch(provider.url, {
         headers: { accept: 'application/json' },
         signal: AbortSignal.timeout(timeoutMilliseconds),
       });
       if (!response.ok) {
+        retryDelayMilliseconds = await getRetryDelayMilliseconds(response);
         throw new Error(`HTTP ${response.status}`);
       }
       return await response.json();
     } catch (error) {
       lastError = error;
       if (attempt < attempts) {
-        await delay(attempt * 1_000);
+        const waitMilliseconds = retryDelayMilliseconds ?? attempt * 1_000;
+        console.warn(
+          `${provider.name} request failed (${
+            error instanceof Error ? error.message : String(error)
+          }); retrying in ${waitMilliseconds / 1_000} seconds.`,
+        );
+        await delay(waitMilliseconds);
       }
     }
   }
