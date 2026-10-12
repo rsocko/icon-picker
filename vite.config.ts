@@ -9,6 +9,7 @@ export default defineConfig({
       entry: {
         index: resolve(import.meta.dirname, 'src/index.ts'),
         core: resolve(import.meta.dirname, 'src/core.ts'),
+        export: resolve(import.meta.dirname, 'src/export.ts'),
         renderer: resolve(import.meta.dirname, 'src/renderer.ts'),
         picker: resolve(import.meta.dirname, 'src/picker.ts'),
       },

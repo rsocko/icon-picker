@@ -7,6 +7,10 @@ import {
   type CSSProperties,
 } from 'react';
 import {
+  copyIconPng,
+  downloadIcon,
+  getIconReactCode,
+  getIconSvg,
   IconRenderer,
   getIconUrl,
   serializeIconValue,
@@ -28,6 +32,14 @@ import { iconMaskCacheKey, loadIconifyMasks } from '../../src/iconify';
 
 type CopyFormat = 'name' | 'svg' | 'url' | 'react' | 'css';
 type IconSize = 'sm' | 'md' | 'lg';
+type IconAction =
+  | 'copy-name'
+  | 'copy-svg'
+  | 'copy-image'
+  | 'copy-url'
+  | 'download-svg'
+  | 'download-png'
+  | 'export';
 
 interface SourceGroup {
   source: IconSource;
@@ -45,6 +57,7 @@ interface SourceFilter {
 interface CopyStatus {
   message: string;
   sequence: number;
+  kind: 'success' | 'error';
 }
 
 const SOURCE_FILTERS: readonly SourceFilter[] = [
@@ -167,25 +180,12 @@ async function getCopyValue(
     case 'url':
       return url ?? serialized;
     case 'svg': {
-      if (!url) return serialized;
-      const response = await fetch(url, { signal });
-      if (!response.ok) {
-        throw new Error(`SVG provider returned HTTP ${response.status}.`);
-      }
-      const svg = await response.text();
-      if (
-        svg.length > 200_000 ||
-        !/^\s*(?:<\?xml[^>]*>\s*)?<svg(?:\s|>)/i.test(svg)
-      ) {
-        throw new Error('SVG provider returned invalid data.');
-      }
-      return svg;
+      return source === 'emoji'
+        ? serialized
+        : getIconSvg(parsed, color, signal);
     }
     case 'react':
-      if (source === 'emoji') {
-        return `<span role="img" aria-label="${name}">${name}</span>`;
-      }
-      return `<IconRenderer value="${serialized}" size={24} color="${color}" />`;
+      return getIconReactCode(parsed, color);
     case 'css':
       return url ? `background-image: url('${url}');` : serialized;
   }
@@ -200,6 +200,24 @@ function SearchGlyph() {
   );
 }
 
+function MoreGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="5" cy="12" r="1.5" />
+      <circle cx="12" cy="12" r="1.5" />
+      <circle cx="19" cy="12" r="1.5" />
+    </svg>
+  );
+}
+
+function CloseGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="m6 6 12 12M18 6 6 18" />
+    </svg>
+  );
+}
+
 function ExplorerTile({
   source,
   name,
@@ -208,6 +226,8 @@ function ExplorerTile({
   copyFormat,
   maskUrl,
   onCopy,
+  onAction,
+  imageClipboardSupported,
 }: {
   source: IconSource;
   name: string;
@@ -216,53 +236,484 @@ function ExplorerTile({
   copyFormat: CopyFormat;
   maskUrl: string | null | undefined;
   onCopy: () => void;
+  onAction: (icon: ParsedIcon, action: IconAction) => void;
+  imageClipboardSupported: boolean;
 }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
+  const shellRef = useRef<HTMLDivElement>(null);
+  const moreRef = useRef<HTMLButtonElement>(null);
   const value = serializeIconValue({ source, name });
+  const icon = useMemo(() => ({ source, name }), [name, source]);
   const isIconifyIcon = source === 'lucide' || source === 'mdi' || source === 'ph';
+  const supportsVector = source !== 'emoji';
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function closeMenu(event: PointerEvent) {
+      if (!shellRef.current?.contains(event.target as Node)) setMenuOpen(false);
+    }
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') setMenuOpen(false);
+    }
+    const closeOnViewportChange = () => setMenuOpen(false);
+    document.addEventListener('pointerdown', closeMenu);
+    window.addEventListener('keydown', closeOnEscape);
+    window.addEventListener('resize', closeOnViewportChange);
+    window.addEventListener('scroll', closeOnViewportChange, true);
+    return () => {
+      document.removeEventListener('pointerdown', closeMenu);
+      window.removeEventListener('keydown', closeOnEscape);
+      window.removeEventListener('resize', closeOnViewportChange);
+      window.removeEventListener('scroll', closeOnViewportChange, true);
+    };
+  }, [menuOpen]);
+
+  function openMenu(anchorX?: number, anchorY?: number) {
+    const rect = moreRef.current?.getBoundingClientRect();
+    const preferredLeft = anchorX ?? rect?.right ?? 8;
+    const preferredTop = anchorY ?? rect?.bottom ?? 8;
+    const left = Math.min(
+      window.innerWidth - 228,
+      Math.max(8, preferredLeft - 220),
+    );
+    const top =
+      window.innerHeight - preferredTop >= 310
+        ? preferredTop + 6
+        : Math.max(8, preferredTop - 300);
+    setMenuPosition({ top, left });
+    setMenuOpen(true);
+  }
+
+  function runAction(action: IconAction) {
+    setMenuOpen(false);
+    onAction(icon, action);
+  }
 
   return (
-    <button
-      type="button"
-      className="explorer-tile"
-      onClick={onCopy}
-      aria-label={`Copy ${value} as ${copyFormat}`}
-      title={value}
+    <div
+      ref={shellRef}
+      className="explorer-tile-shell"
+      onContextMenu={(event) => {
+        event.preventDefault();
+        openMenu(event.clientX, event.clientY);
+      }}
     >
-      <span
-        className="explorer-icon"
-        style={{ width: size.icon, height: size.icon }}
+      <button
+        type="button"
+        className="explorer-tile"
+        onClick={onCopy}
+        onKeyDown={(event) => {
+          if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+            event.preventDefault();
+            openMenu();
+          }
+        }}
+        aria-label={`Copy ${value} as ${copyFormat}`}
+        title={value}
       >
-        {isIconifyIcon && maskUrl ? (
-          <span
-            role="img"
-            aria-label={value}
-            className="explorer-icon-mask"
-            style={{
-              width: size.icon * 0.82,
-              height: size.icon * 0.82,
-              backgroundColor: color,
-              maskImage: `url("${maskUrl}")`,
-              WebkitMaskImage: `url("${maskUrl}")`,
-            }}
+        <span
+          className="explorer-icon"
+          style={{ width: size.icon, height: size.icon }}
+        >
+          {isIconifyIcon && maskUrl ? (
+            <span
+              role="img"
+              aria-label={value}
+              className="explorer-icon-mask"
+              style={{
+                width: size.icon * 0.82,
+                height: size.icon * 0.82,
+                backgroundColor: color,
+                maskImage: `url("${maskUrl}")`,
+                WebkitMaskImage: `url("${maskUrl}")`,
+              }}
+            />
+          ) : isIconifyIcon && maskUrl === undefined ? (
+            <span
+              className="explorer-icon-placeholder"
+              aria-hidden="true"
+              style={{ width: size.icon * 0.82, height: size.icon * 0.82 }}
+            />
+          ) : (
+            <IconRenderer
+              value={value}
+              size={size.icon * 0.82}
+              color={source === 'dash' || source === 'si' ? undefined : color}
+              label=""
+              fallback={<span className="tile-fallback">!</span>}
+            />
+          )}
+        </span>
+        <code>{name}</code>
+      </button>
+      <button
+        ref={moreRef}
+        type="button"
+        className="explorer-tile-more"
+        aria-label={`More actions for ${value}`}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        onClick={() => {
+          if (menuOpen) setMenuOpen(false);
+          else openMenu();
+        }}
+      >
+        <MoreGlyph />
+      </button>
+      {menuOpen && (
+        <div
+          className="explorer-action-menu"
+          role="menu"
+          aria-label={value}
+          style={menuPosition}
+        >
+          <button type="button" role="menuitem" onClick={() => runAction('copy-name')}>
+            Copy name
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={!supportsVector}
+            onClick={() => runAction('copy-svg')}
+          >
+            Copy SVG
+            {!supportsVector && <small>Unavailable for emoji</small>}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={!imageClipboardSupported}
+            onClick={() => runAction('copy-image')}
+          >
+            Copy image
+            {!imageClipboardSupported && <small>Not supported by this browser</small>}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={!supportsVector}
+            onClick={() => runAction('copy-url')}
+          >
+            Copy URL
+            {!supportsVector && <small>Unavailable for emoji</small>}
+          </button>
+          <span className="explorer-action-menu-separator" role="separator" />
+          <button
+            type="button"
+            role="menuitem"
+            disabled={!supportsVector}
+            onClick={() => runAction('download-svg')}
+          >
+            Download SVG
+          </button>
+          <button type="button" role="menuitem" onClick={() => runAction('download-png')}>
+            Download PNG
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="explorer-action-menu-primary"
+            onClick={() => runAction('export')}
+          >
+            Export options…
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ExportPanel({
+  icon,
+  color,
+  imageClipboardSupported,
+  onClose,
+  onStatus,
+}: {
+  icon: ParsedIcon;
+  color: string;
+  imageClipboardSupported: boolean;
+  onClose: () => void;
+  onStatus: (message: string, kind?: CopyStatus['kind']) => void;
+}) {
+  const [size, setSize] = useState(128);
+  const [padding, setPadding] = useState(12);
+  const [background, setBackground] = useState('transparent');
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const value = serializeIconValue(icon);
+  const supportsVector = icon.source !== 'emoji';
+  const url = getIconUrl(icon, color);
+
+  useEffect(() => {
+    closeRef.current?.focus();
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [onClose]);
+
+  async function runAction(label: string, action: () => Promise<void>) {
+    setBusyAction(label);
+    try {
+      await action();
+      onStatus(label);
+    } catch (error) {
+      onStatus(error instanceof Error ? error.message : `${label} failed.`, 'error');
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function copyText(label: string, text: string | Promise<string>) {
+    await runAction(label, async () => {
+      await navigator.clipboard.writeText(await text);
+    });
+  }
+
+  const pngOptions = {
+    size,
+    padding,
+    background,
+    color,
+  };
+  const previewBackground =
+    background === 'transparent'
+      ? undefined
+      : background.startsWith('#')
+        ? background
+        : `#${background}`;
+
+  function updateSize(nextSize: number) {
+    setSize(nextSize);
+    setPadding((current) =>
+      Math.min(current, Math.max(0, Math.floor((nextSize - 1) / 2))),
+    );
+  }
+
+  return (
+    <aside
+      className="explorer-export-panel"
+      role="dialog"
+      aria-modal="false"
+      aria-labelledby="export-panel-title"
+    >
+      <header>
+        <div>
+          <span>{icon.source}</span>
+          <h2 id="export-panel-title">{icon.name}</h2>
+          <code>{value}</code>
+        </div>
+        <button
+          ref={closeRef}
+          type="button"
+          className="export-panel-close"
+          onClick={onClose}
+          aria-label="Close export options"
+        >
+          <CloseGlyph />
+        </button>
+      </header>
+
+      <div
+        className={`export-preview ${
+          background === 'transparent' ? 'export-preview-transparent' : ''
+        }`}
+        style={{ backgroundColor: previewBackground }}
+      >
+        <IconRenderer
+          value={value}
+          size={Math.max(32, 112 - padding)}
+          color={icon.source === 'dash' ? undefined : color}
+          label={value}
+        />
+      </div>
+
+      <div className="export-panel-settings">
+        <fieldset>
+          <legend>PNG size</legend>
+          <div className="export-choice-row">
+            {[32, 64, 128, 256].map((option) => (
+              <button
+                key={option}
+                type="button"
+                className={size === option ? 'active' : undefined}
+                onClick={() => updateSize(option)}
+                aria-pressed={size === option}
+              >
+                {option}
+              </button>
+            ))}
+            <label>
+              <span className="sr-only">Custom PNG size</span>
+              <input
+                type="number"
+                min="16"
+                max="2048"
+                value={size}
+                onChange={(event) =>
+                  updateSize(
+                    Math.min(2048, Math.max(16, Number(event.target.value))),
+                  )
+                }
+                aria-label="Custom PNG size"
+              />
+              px
+            </label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>Background</legend>
+          <div className="export-choice-row">
+            {([
+              ['transparent', 'Transparent'],
+              ['#ffffff', 'White'],
+              ['#080b12', 'Dark'],
+            ] as const).map(([option, label]) => (
+              <button
+                key={option}
+                type="button"
+                className={background === option ? 'active' : undefined}
+                onClick={() => setBackground(option)}
+                aria-pressed={background === option}
+              >
+                {label}
+              </button>
+            ))}
+            <input
+              type="color"
+              value={background === 'transparent' ? '#ffffff' : background}
+              onChange={(event) => setBackground(event.target.value)}
+              aria-label="Custom background color"
+            />
+          </div>
+        </fieldset>
+        <label className="export-padding">
+          Padding
+          <input
+            type="range"
+            min="0"
+            max={Math.max(0, Math.floor(size / 3))}
+            value={padding}
+            onChange={(event) => setPadding(Number(event.target.value))}
           />
-        ) : isIconifyIcon && maskUrl === undefined ? (
-          <span
-            className="explorer-icon-placeholder"
-            aria-hidden="true"
-            style={{ width: size.icon * 0.82, height: size.icon * 0.82 }}
-          />
-        ) : (
-          <IconRenderer
-            value={value}
-            size={size.icon * 0.82}
-            color={source === 'dash' || source === 'si' ? undefined : color}
-            label=""
-            fallback={<span className="tile-fallback">!</span>}
-          />
-        )}
-      </span>
-      <code>{name}</code>
-    </button>
+          <output>{padding}px</output>
+        </label>
+      </div>
+
+      {icon.source === 'emoji' && (
+        <p className="export-provider-note">
+          Emoji PNG appearance follows this device. Emoji do not have provider SVG files.
+        </p>
+      )}
+
+      <section className="export-action-group" aria-labelledby="export-copy-heading">
+        <h3 id="export-copy-heading">Copy</h3>
+        <div>
+          <button
+            type="button"
+            onClick={() => void copyText('Name copied', value)}
+            disabled={busyAction !== null}
+          >
+            Name
+          </button>
+          <button
+            type="button"
+            onClick={() => void copyText('SVG copied', getIconSvg(icon, color))}
+            disabled={!supportsVector || busyAction !== null}
+          >
+            SVG
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              void runAction('PNG image copied', () => copyIconPng(icon, pngOptions))
+            }
+            disabled={!imageClipboardSupported || busyAction !== null}
+          >
+            PNG image
+          </button>
+          <button
+            type="button"
+            onClick={() => void copyText('URL copied', url ?? '')}
+            disabled={!url || busyAction !== null}
+          >
+            URL
+          </button>
+        </div>
+      </section>
+
+      <section className="export-action-group" aria-labelledby="export-download-heading">
+        <h3 id="export-download-heading">Download</h3>
+        <div>
+          <button
+            type="button"
+            onClick={() =>
+              void runAction('SVG downloaded', () =>
+                downloadIcon(icon, 'svg', { color }),
+              )
+            }
+            disabled={!supportsVector || busyAction !== null}
+          >
+            SVG
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              void runAction('PNG downloaded', () =>
+                downloadIcon(icon, 'png', pngOptions),
+              )
+            }
+            disabled={busyAction !== null}
+          >
+            PNG
+          </button>
+        </div>
+      </section>
+
+      <section className="export-action-group" aria-labelledby="export-code-heading">
+        <h3 id="export-code-heading">Code</h3>
+        <div>
+          <button
+            type="button"
+            onClick={() =>
+              void copyText('React code copied', getIconReactCode(icon, color))
+            }
+            disabled={busyAction !== null}
+          >
+            React
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              void copyText(
+                'CSS copied',
+                url ? `background-image: url('${url}');` : value,
+              )
+            }
+            disabled={busyAction !== null}
+          >
+            CSS
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              void copyText(
+                'HTML copied',
+                url
+                  ? `<img src="${url}" alt="${icon.name}" width="${size}" height="${size}" />`
+                  : `<span role="img" aria-label="${icon.name}">${icon.name}</span>`,
+              )
+            }
+            disabled={busyAction !== null}
+          >
+            HTML
+          </button>
+        </div>
+      </section>
+    </aside>
   );
 }
 
@@ -292,6 +743,7 @@ export function ExplorerPage() {
   const [copyFormat, setCopyFormat] = useState<CopyFormat>('name');
   const [iconSize, setIconSize] = useState<IconSize>('md');
   const [copyStatus, setCopyStatus] = useState<CopyStatus | null>(null);
+  const [exportIcon, setExportIcon] = useState<ParsedIcon | null>(null);
   const [iconMasks, setIconMasks] = useState<Record<string, string | null>>({});
   const searchRef = useRef<HTMLInputElement>(null);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -521,6 +973,9 @@ export function ExplorerPage() {
     ],
   );
   const providerError = catalogError || searchError;
+  const imageClipboardSupported =
+    typeof ClipboardItem !== 'undefined' &&
+    typeof navigator.clipboard?.write === 'function';
   const totalResults = displayedGroups.reduce(
     (count, group) => count + group.icons.length,
     0,
@@ -551,57 +1006,124 @@ export function ExplorerPage() {
     return () => controller.abort();
   }, [maskGroups]);
 
-  async function copyIcon(source: IconSource, name: string) {
-    const selectedFormat = copyFormat;
+  function showStatus(
+    message: string,
+    kind: CopyStatus['kind'] = 'success',
+  ) {
+    if (copyTimer.current) clearTimeout(copyTimer.current);
+    setCopyStatus({
+      message,
+      kind,
+      sequence: ++copyAnnouncementSequence.current,
+    });
+    copyTimer.current = setTimeout(() => setCopyStatus(null), 2400);
+  }
+
+  async function runLatestAction(
+    action: (
+      signal: AbortSignal,
+      assertCurrent: () => void,
+    ) => Promise<string>,
+  ) {
     const requestSequence = ++copyRequestSequence.current;
     copyController.current?.abort();
     const controller = new AbortController();
     copyController.current = controller;
     if (copyTimer.current) clearTimeout(copyTimer.current);
     setCopyStatus(null);
+    const assertCurrent = () => {
+      if (
+        controller.signal.aborted ||
+        requestSequence !== copyRequestSequence.current
+      ) {
+        throw new DOMException('The operation was aborted.', 'AbortError');
+      }
+    };
     try {
-      const value = await getCopyValue(
-        source,
-        name,
-        selectedFormat,
-        color,
-        controller.signal,
+      const message = await action(controller.signal, assertCurrent);
+      assertCurrent();
+      showStatus(message);
+    } catch (error) {
+      if (
+        controller.signal.aborted ||
+        requestSequence !== copyRequestSequence.current
+      ) {
+        return;
+      }
+      showStatus(
+        error instanceof Error ? error.message : 'The icon action failed.',
+        'error',
       );
-      if (
-        controller.signal.aborted ||
-        requestSequence !== copyRequestSequence.current
-      ) {
-        return;
-      }
-      await navigator.clipboard.writeText(value);
-      if (
-        controller.signal.aborted ||
-        requestSequence !== copyRequestSequence.current
-      ) {
-        return;
-      }
-      setCopyStatus({
-        message: `Copied ${selectedFormat}`,
-        sequence: ++copyAnnouncementSequence.current,
-      });
-      copyTimer.current = setTimeout(() => setCopyStatus(null), 1800);
-    } catch {
-      if (
-        controller.signal.aborted ||
-        requestSequence !== copyRequestSequence.current
-      ) {
-        return;
-      }
-      setCopyStatus({
-        message: 'Copy failed',
-        sequence: ++copyAnnouncementSequence.current,
-      });
-      copyTimer.current = setTimeout(() => setCopyStatus(null), 1800);
     } finally {
       if (copyController.current === controller) {
         copyController.current = null;
       }
     }
+  }
+
+  async function copyIcon(source: IconSource, name: string) {
+    const selectedFormat = copyFormat;
+    await runLatestAction(async (signal, assertCurrent) => {
+      const value = await getCopyValue(
+        source,
+        name,
+        selectedFormat,
+        color,
+        signal,
+      );
+      assertCurrent();
+      await navigator.clipboard.writeText(value);
+      return `Copied ${selectedFormat}`;
+    });
+  }
+
+  function handleIconAction(icon: ParsedIcon, action: IconAction) {
+    if (action === 'export') {
+      setExportIcon(icon);
+      return;
+    }
+
+    void runLatestAction(async (signal, assertCurrent) => {
+      const value = serializeIconValue(icon);
+      switch (action) {
+        case 'copy-name':
+          assertCurrent();
+          await navigator.clipboard.writeText(value);
+          return 'Name copied';
+        case 'copy-svg':
+          {
+            const svg = await getIconSvg(icon, color, signal);
+            assertCurrent();
+            await navigator.clipboard.writeText(svg);
+          }
+          return 'SVG copied';
+        case 'copy-image':
+          await copyIconPng(
+            icon,
+            { size: 128, padding: 12, background: 'transparent', color },
+            signal,
+          );
+          return 'PNG image copied';
+        case 'copy-url': {
+          const url = getIconUrl(icon, color);
+          if (!url) throw new Error('This icon does not have a provider URL.');
+          assertCurrent();
+          await navigator.clipboard.writeText(url);
+          return 'URL copied';
+        }
+        case 'download-svg':
+          await downloadIcon(icon, 'svg', { color }, signal);
+          return 'SVG downloaded';
+        case 'download-png':
+          await downloadIcon(
+            icon,
+            'png',
+            { size: 128, padding: 12, background: 'transparent', color },
+            signal,
+          );
+          return 'PNG downloaded';
+      }
+    });
   }
 
   function updateCustomColor(nextColor: string) {
@@ -747,7 +1269,7 @@ export function ExplorerPage() {
           <span className="control-divider" />
 
           <div className="control-group copy-controls" aria-label="Copy format">
-            <span>Copy:</span>
+            <span>Click copies:</span>
             {COPY_FORMATS.map((format) => (
               <button
                 key={format.id}
@@ -878,6 +1400,8 @@ export function ExplorerPage() {
                       copyFormat={copyFormat}
                       maskUrl={iconMasks[iconMaskCacheKey(browseSource, name)]}
                       onCopy={() => void copyIcon(browseSource, name)}
+                      onAction={handleIconAction}
+                      imageClipboardSupported={imageClipboardSupported}
                     />
                   ))}
                 </div>
@@ -930,6 +1454,8 @@ export function ExplorerPage() {
                     copyFormat={copyFormat}
                     maskUrl={iconMasks[iconMaskCacheKey(group.source, name)]}
                     onCopy={() => void copyIcon(group.source, name)}
+                    onAction={handleIconAction}
+                    imageClipboardSupported={imageClipboardSupported}
                   />
                 ))}
               </div>
@@ -940,13 +1466,27 @@ export function ExplorerPage() {
 
       <footer className="explorer-footer">
         <span>Client-side data from Iconify, jsDelivr, and Simple Icons.</span>
-        <span>Click an icon to copy · ⌘/Ctrl+K searches · 1–6 filter providers</span>
+        <span>
+          Click to copy · More actions exports · ⌘/Ctrl+K searches · 1–6 filter
+          providers
+        </span>
       </footer>
+
+      {exportIcon && (
+        <ExportPanel
+          key={serializeIconValue(exportIcon)}
+          icon={exportIcon}
+          color={color}
+          imageClipboardSupported={imageClipboardSupported}
+          onClose={() => setExportIcon(null)}
+          onStatus={showStatus}
+        />
+      )}
 
       {copyStatus && (
         <div
           key={copyStatus.sequence}
-          className="copy-toast"
+          className={`copy-toast copy-toast-${copyStatus.kind}`}
           role="status"
           aria-live="polite"
         >

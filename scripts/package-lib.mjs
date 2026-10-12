@@ -20,6 +20,8 @@ export const requiredPackageFiles = [
   'dist/index.d.ts',
   'dist/core.js',
   'dist/core.d.ts',
+  'dist/export.js',
+  'dist/export.d.ts',
   'dist/renderer.js',
   'dist/renderer.d.ts',
   'dist/picker.js',

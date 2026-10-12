@@ -74,6 +74,10 @@ The root export provides the complete public API:
 - `parseIconValue`
 - `serializeIconValue`
 - `getIconUrl`
+- `getIconSvg`
+- `renderIconPng`
+- `copyIconPng`
+- `downloadIcon`
 - `IconSource`, `ParsedIcon`, and all component prop types
 
 Smaller subpath exports keep utility and renderer consumers away from the
@@ -93,6 +97,13 @@ import {
   IconRenderer,
   type IconRendererProps,
 } from '@rsocko/icon-picker/renderer';
+
+import {
+  copyIconPng,
+  downloadIcon,
+  getIconSvg,
+  renderIconPng,
+} from '@rsocko/icon-picker/export';
 
 import {
   IconPicker,
@@ -174,6 +185,44 @@ requests, including aliases, then rendered as CSS masks so uncolored icons
 inherit the consumer's current text color. Set `modal` only when embedding it in
 your own modal surface; `IconPickerButton` does this automatically. It accepts
 the same `theme` and typed `style` theming props as the button.
+
+The hosted Explorer keeps tile clicks optimized for immediate copying and adds a
+visible **More actions** control to every icon. The same menu opens from
+right-click, the keyboard Menu key, or Shift+F10. It supports provider-aware SVG
+and PNG copying, downloads, URLs, code snippets, and a focused export inspector
+for PNG size, padding, and background.
+
+### Browser export utilities
+
+The `@rsocko/icon-picker/export` entry point provides typed browser utilities:
+
+```ts
+import {
+  copyIconPng,
+  downloadIcon,
+  getIconSvg,
+  renderIconPng,
+} from '@rsocko/icon-picker/export';
+
+const icon = { source: 'lucide', name: 'rocket' } as const;
+
+const svg = await getIconSvg(icon, '#3b82f6');
+const png = await renderIconPng(icon, {
+  size: 128,
+  padding: 12,
+  background: 'transparent',
+  color: '#3b82f6',
+});
+
+await copyIconPng(icon, { size: 128, color: '#3b82f6' });
+await downloadIcon(icon, 'svg', { color: '#3b82f6' });
+```
+
+SVG export is available for Lucide, Material Design Icons, Phosphor, Dashboard
+Icons, and Simple Icons. Emoji PNG export rasterizes the current platform glyph,
+so its appearance varies by device. Copying PNG images requires the browser
+Clipboard API and `ClipboardItem`; callers receive an `IconExportError` when an
+operation or format is unavailable.
 
 ### `IconRenderer`
 

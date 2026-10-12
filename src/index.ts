@@ -4,6 +4,16 @@ export {
   parseIconValue,
   serializeIconValue,
 } from './core';
+export {
+  copyIconPng,
+  downloadIcon,
+  getIconExportFilename,
+  getIconReactCode,
+  getIconSvg,
+  IconExportError,
+  renderIconPng,
+} from './export';
+export type { IconExportFormat, IconPngOptions } from './export';
 export { IconPicker } from './IconPicker';
 export { IconPickerButton } from './IconPickerButton';
 export { IconRenderer } from './IconRenderer';
