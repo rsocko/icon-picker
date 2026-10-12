@@ -20,6 +20,15 @@ The companion
 dense icon-finder workspace with provider filters, copy formats, colors, sizes,
 keyboard shortcuts, complete provider browsing, and live multi-provider search.
 
+## Icon catalog updates
+
+Icon catalogs are loaded directly from Iconify and Dashboard Icons, so newly
+published icons become available without a package release. A weekly
+[`Icon provider health`](.github/workflows/icon-providers.yml) workflow checks
+that every upstream catalog remains available and compatible, retries transient
+network failures, and records current provider icon counts in its run summary.
+It can also be run manually from GitHub Actions.
+
 ## Install
 
 ```sh
